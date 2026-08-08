@@ -32,11 +32,12 @@ func _ready() -> void:
 	_health.health_changed.connect(_on_health_changed)
 	_health.died.connect(_on_died)
 
-	# Every tree instances the same meshes, and therefore the same materials.
+	# Every tree instances the same imported mesh, and therefore the same materials.
 	# Without a per-instance copy, hitting one tree lights up the whole forest.
-	var mesh_instances: Array[MeshInstance3D] = [%Trunk, %Canopy]
-	for mesh_instance in mesh_instances:
-		_materials.append(_make_flashable_material(mesh_instance))
+	# Walked rather than named: the model is an imported glTF scene, so its mesh
+	# nodes belong to the asset and are not ours to pin unique names on.
+	for mesh_instance in _find_mesh_instances(_visuals):
+		_materials.append_array(_make_flashable_materials(mesh_instance))
 
 
 func _on_health_changed(current: int, _maximum: int) -> void:
@@ -81,14 +82,32 @@ func _on_died() -> void:
 	queue_free()
 
 
-func _make_flashable_material(mesh_instance: MeshInstance3D) -> StandardMaterial3D:
-	var source: StandardMaterial3D = null
-	if mesh_instance.mesh is PrimitiveMesh:
-		source = (mesh_instance.mesh as PrimitiveMesh).material as StandardMaterial3D
+func _find_mesh_instances(root: Node) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	for child in root.get_children():
+		if child is MeshInstance3D:
+			found.append(child)
+		found.append_array(_find_mesh_instances(child))
+	return found
 
-	var material: StandardMaterial3D = source.duplicate() if source else StandardMaterial3D.new()
-	material.emission_enabled = true
-	material.emission = Color.WHITE
-	material.emission_energy_multiplier = 0.0
-	mesh_instance.material_override = material
-	return material
+
+## Gives [param mesh_instance] its own copy of each surface material, wired so the
+## hit flash can drive emission.
+##
+## Per-surface overrides rather than a single [member GeometryInstance3D.material_override]:
+## the imported tree is one mesh carrying a bark surface and a foliage surface, and
+## one override would collapse both to a single colour.
+func _make_flashable_materials(mesh_instance: MeshInstance3D) -> Array[StandardMaterial3D]:
+	var made: Array[StandardMaterial3D] = []
+	if mesh_instance.mesh == null:
+		return made
+
+	for surface in mesh_instance.mesh.get_surface_count():
+		var source := mesh_instance.get_active_material(surface) as StandardMaterial3D
+		var material: StandardMaterial3D = source.duplicate() if source else StandardMaterial3D.new()
+		material.emission_enabled = true
+		material.emission = Color.WHITE
+		material.emission_energy_multiplier = 0.0
+		mesh_instance.set_surface_override_material(surface, material)
+		made.append(material)
+	return made
