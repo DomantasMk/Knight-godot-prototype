@@ -66,6 +66,7 @@ levels/{level_01,main_menu}/                        one folder per level
 systems/                                            cross-cutting logic with no scene of its own
 systems/components/                                 reusable nodes an entity composes in
 resources/                                          .tres data: stats, items, themes
+tools/                                              dev-only harnesses, not shipped
 ui/                                                 HUD, menus
 ```
 
@@ -111,6 +112,23 @@ $godot = $env:GODOT_BIN                            # e.g. ...\Godot_v4.7.1-stabl
 & $godot --path . --headless --import              # reimport / regenerate .godot
 & $godot --path . --headless --quit-after 60       # smoke-test: run 60 frames, print errors
 ```
+
+### Playtesting the running game — on request only
+
+`tools/playtest/` boots a scene in a real window, drives it with scripted Input Map
+actions, asserts on live game state, and captures screenshots to `local/playtest/`.
+
+**Do not run it unless the user asked.** Not to settle your own doubt about a change, not
+as a check after implementing something, not because a task felt visual. It opens a window
+on the user's desktop and steals focus for several seconds, and each screenshot read costs
+~250 tokens that then ride along in context for the whole session — costs the user should
+be choosing to pay. Finish the code, state plainly what you did *not* verify at runtime,
+and offer to playtest.
+
+When the user does ask — "playtest it", "run the game", "show me", "does it actually
+work", `/playtest` — **invoke the `playtest` skill**, which carries the full step
+reference, the assert-first rule, and the screenshot budget. Don't reconstruct the command
+line from memory.
 
 Use `$env:GODOT_BIN_CONSOLE` instead when you need stdout/stderr captured on the command line — the plain `.exe` detaches from the console on Windows. The last two commands are the cheapest way to verify a change did not break scene loading or parsing.
 
