@@ -8,6 +8,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Remote: https://github.com/DomantasMk/Knight-godot-prototype (branch `main`).
 
+## GodotPrompter
+
+This project uses the GodotPrompter plugin. **Before implementing any Godot system, invoke the matching `godot-prompter:*` skill.** This applies to subagents writing Godot code too — you do not receive the plugin's instructions automatically, this file is your only notice of them.
+
+Match the task to a skill, e.g.:
+
+| Building… | Invoke |
+|---|---|
+| Movement, input, cameras | `player-controller`, `input-handling`, `camera-system` |
+| Architecture | `state-machine`, `event-bus`, `scene-organization`, `component-system`, `resource-pattern` |
+| Gameplay systems | `inventory-system`, `dialogue-system`, `ability-system`, `save-load` |
+| Enemy AI | `ai-navigation` |
+| UI, HUD | `godot-ui`, `hud-system`, `responsive-ui` |
+| Animation, tweens, audio | `animation-system`, `tween-animation`, `audio-system` |
+| Physics, 3D | `physics-system`, `3d-essentials` |
+| Shaders, VFX | `shader-basics`, `particles-vfx` |
+| GDScript idioms | `gdscript-patterns`, `gdscript-advanced` |
+| Test, debug, profile, review | `godot-testing`, `godot-debugging`, `godot-optimization`, `godot-code-review` |
+
+Invoke `godot-prompter:using-godot-prompter` for the full index.
+
+Knowing the engine class is not the same as knowing the pattern — invoke the skill even when the change looks like a one-liner, because a one-liner still picks node types and sets architecture. Having loaded one Godot skill does not cover a different system.
+
 ## Directory layout
 
 Co-located feature folders — a feature's scene, script, and helpers live together, so a feature can be moved or deleted as one directory. `assets/` is the exception and stays sorted by type.
