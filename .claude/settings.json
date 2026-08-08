@@ -1,0 +1,17 @@
+{
+  "$comment": "Checked in and shared. Machine-specific values (tool paths) belong in settings.local.json, which is gitignored.",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git show:*)",
+      "PowerShell(git branch:*)"
+    ]
+  }
+}

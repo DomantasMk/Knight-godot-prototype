@@ -42,3 +42,7 @@ Thumbs.db
 # Machine-local notes and scratch work. Anything here may contain absolute paths
 # and personal setup detail, which is exactly why it stays out of the repo.
 local/
+
+# Claude Code: settings.json is shared, settings.local.json holds this machine's
+# tool paths (GODOT_BIN etc.) and stays out of the repo for the same reason.
+.claude/settings.local.json
