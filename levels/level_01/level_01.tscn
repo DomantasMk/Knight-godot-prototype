@@ -1,6 +1,9 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=13 format=3]
 
-[ext_resource type="Script" path="res://levels/level_01/level_01.gd" id="1_script"]
+[ext_resource type="Script" path="res://levels/level_01/level_01.gd" id="1_level"]
+[ext_resource type="PackedScene" path="res://entities/player/player.tscn" id="2_player"]
+[ext_resource type="Script" path="res://systems/rts_camera.gd" id="3_camera"]
+[ext_resource type="PackedScene" path="res://ui/demo_hud.tscn" id="4_hud"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_1"]
 
@@ -15,11 +18,24 @@ tonemap_mode = 2
 [sub_resource type="BoxShape3D" id="Box_1"]
 size = Vector3(40, 1, 40)
 
+[sub_resource type="StandardMaterial3D" id="Mat_ground"]
+albedo_color = Color(0.27, 0.45, 0.24, 1)
+roughness = 0.95
+
 [sub_resource type="BoxMesh" id="Mesh_1"]
+material = SubResource("Mat_ground")
 size = Vector3(40, 1, 40)
 
+[sub_resource type="StandardMaterial3D" id="Mat_road"]
+albedo_color = Color(0.46, 0.4, 0.32, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="Mesh_road"]
+material = SubResource("Mat_road")
+size = Vector3(6, 0.04, 40)
+
 [node name="Level01" type="Node3D"]
-script = ExtResource("1_script")
+script = ExtResource("1_level")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_1")
@@ -37,8 +53,20 @@ shape = SubResource("Box_1")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
 mesh = SubResource("Mesh_1")
 
-[node name="PlayerSpawn" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+[node name="Road" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("Mesh_road")
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.906308, 0.422618, 0, -0.422618, 0.906308, 0, 6, 10)
+[node name="Trees" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 8)
+
+[node name="RtsCamera" type="Camera3D" parent="."]
+unique_name_in_owner = true
+current = true
+script = ExtResource("3_camera")
+
+[node name="DemoHud" parent="." instance=ExtResource("4_hud")]
