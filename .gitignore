@@ -1,9 +1,17 @@
 # Godot 4+ specific ignores
 .godot/
+.nomedia
 /android/
+.import/
+*.tmp
 
-# Export artifacts
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Export artifacts and secrets
 export/
+export.cfg
+export_credentials.cfg
 *.exe
 *.pck
 *.apk
@@ -19,6 +27,8 @@ export/
 .mono/
 bin/
 obj/
+data_*/
+mono_crash.*.json
 *.csproj.user
 *.sln.user
 
