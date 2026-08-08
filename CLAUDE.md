@@ -98,10 +98,12 @@ These settings are already chosen and shape how new code should be written:
 
 ## Commands
 
-Godot is not on `PATH`. The installed binary is:
+Godot is not on `PATH`. Point `$godot` at your Godot 4.7.1 binary — set `GODOT_BIN` in
+your environment to avoid retyping it, and keep the path out of this file so the repo
+stays machine-agnostic.
 
 ```powershell
-$godot = "C:\Users\doman\Downloads\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64.exe"
+$godot = $env:GODOT_BIN                            # e.g. ...\Godot_v4.7.1-stable_win64.exe
 
 & $godot --path .                                  # open in the editor
 & $godot --path . res://path/to/scene.tscn         # run one scene
