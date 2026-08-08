@@ -4,9 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`KnightPrototype` — an early-stage **3D** Godot 4.7 game prototype. The scaffolding, autoloads, Input Map, and a greybox test level exist; no gameplay does yet. There is no test suite and no build tooling beyond Godot itself.
+`KnightPrototype` — an early-stage **3D** Godot 4.7 game prototype. One gameplay loop is playable in greybox: a knight walks under a fixed overhead camera and swings at choppable trees. There is no test suite and no build tooling beyond Godot itself.
 
 Remote: https://github.com/DomantasMk/Knight-godot-prototype (branch `main`).
+
+## Project context
+
+`context/` holds short notes on **why** this project is shaped the way it is — decisions,
+intent, and invariants that the code cannot state on its own. The index below is the memory;
+each file is the footnote you open only when working in that area.
+
+| Note | |
+|---|---|
+| [vision](context/vision.md) | 3D knight, fixed WC3-style camera, greybox melee; proving one loop — approach, swing, break. Genre past that is **unconfirmed**. |
+| [level-01](context/level-01.md) | The main scene is a **demo harness**, not a designed level: 40×40 floor, road, player at `(0,0.1,8)`, 26 trees scattered at runtime from a fixed seed. Replace freely. |
+| [combat](context/combat.md) | Damage = Hitbox (deals, on `strike()` only) → Hurtbox (receives) → Health (stores), composed per entity. Includes the 3D physics layer table. |
+| [camera-and-movement](context/camera-and-movement.md) | Fixed 56° follow camera, no player control; WASD is camera-relative, so the two are one system. Camera must be a **sibling** of the player. |
+| [conventions](context/conventions.md) | Recurring rules: hand-written `.tscn` `@export` caveat, Jolt uniform-scale rule, `1-exp(-k·dt)` smoothing, tween kill-before-restart, material duplication. |
+
+**Read** a note before changing that area — the gotchas are there because each one cost a bug.
+**Update** it in the same commit that invalidates it; a stale note is worse than no note.
+Adding or deleting a note means adding or deleting its row above. Full rules and the
+template: `context/README.md`. Keep notes under ~25 lines — the cap is what keeps this cheap.
+
+This is project memory, checked in and shared. Preferences about *how the user likes to
+work* are not project facts and do not belong here.
 
 ## GodotPrompter
 
@@ -38,9 +60,11 @@ Co-located feature folders — a feature's scene, script, and helpers live toget
 ```
 assets/{audio/{music,sfx},fonts,models,textures}/   raw art and audio
 autoloads/                                          singletons (see below)
-entities/{player,enemy}/                            <name>.tscn + <name>.gd together
+context/                                            project memory (see above) — .md only, no code
+entities/{player,tree,…}/                           <name>.tscn + <name>.gd together
 levels/{level_01,main_menu}/                        one folder per level
 systems/                                            cross-cutting logic with no scene of its own
+systems/components/                                 reusable nodes an entity composes in
 resources/                                          .tres data: stats, items, themes
 ui/                                                 HUD, menus
 ```
@@ -69,7 +93,8 @@ These settings are already chosen and shape how new code should be written:
 - **Renderer**: Forward+, with the Direct3D 12 rendering driver on Windows (`rendering_device/driver.windows="d3d12"`).
 - **3D physics**: Jolt Physics (not the legacy Godot Physics). Behavior of joints, damping, and layer masks differs from the default engine — check Jolt-specific docs when tuning.
 - **Stretch**: `canvas_items` mode with `expand` aspect, i.e. resolution-independent 2D/UI that gains screen area rather than letterboxing on wider displays.
-- **Main scene**: `res://levels/level_01/level_01.tscn` — a greybox (40×40 floor, directional light, procedural sky, camera, `PlayerSpawn` marker). It exists so F5 always does something; replace it freely.
+- **Main scene**: `res://levels/level_01/level_01.tscn` — a greybox demo harness, not a designed level. See [context/level-01.md](context/level-01.md).
+- **3D physics layers**: `1 world`, `2 player`, `3 choppable`, `4 player_hitbox`. Named in `[layer_names]`; see [context/combat.md](context/combat.md) for what masks what.
 
 ## Commands
 
