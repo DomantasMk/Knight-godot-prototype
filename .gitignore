@@ -38,3 +38,7 @@ mono_crash.*.json
 *.swp
 .DS_Store
 Thumbs.db
+
+# Machine-local notes and scratch work. Anything here may contain absolute paths
+# and personal setup detail, which is exactly why it stays out of the repo.
+local/
