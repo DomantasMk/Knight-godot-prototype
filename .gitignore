@@ -1,0 +1,30 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Export artifacts
+export/
+*.exe
+*.pck
+*.apk
+*.aab
+*.ipa
+*.x86_64
+*.x86_32
+*.arm32
+*.arm64
+*.zip
+
+# C# / .NET build output (if C# is enabled later)
+.mono/
+bin/
+obj/
+*.csproj.user
+*.sln.user
+
+# IDE and OS files
+.vs/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
