@@ -1,6 +1,6 @@
 extends CharacterBody3D
 
-## Greybox knight. WASD moves relative to the camera, the body turns to face the
+## The knight. WASD moves relative to the camera, the body turns to face the
 ## direction of travel, and LMB swings a forward arc that damages whatever is
 ## inside the Hitbox at the moment of impact.
 

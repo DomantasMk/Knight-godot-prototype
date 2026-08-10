@@ -32,6 +32,17 @@ entity scene references the asset by UID, and it differs per file.
 
 **Commit the `.import` file. Never commit `.godot/`.**
 
+**A GLB coloured by vertex colours imports white.** Godot's glTF importer reads `COLOR_0`
+into the mesh but never sets `StandardMaterial3D.vertex_color_use_as_albedo`, so the data
+is there and unused. Point the asset's `.import` at the project's import script:
+
+```
+import_script/path="res://tools/import/vertex_color_material.gd"
+```
+
+Do this by **editing** the `.import` file. Deleting it to force a reimport mints a new UID
+and silently orphans the `ext_resource` in every scene that instanced the model.
+
 A textured GLB also makes Godot extract its embedded image as a sibling
 `<name>_Image_0.png` (+ `.import`). Those belong to the asset — delete or commit them
 together with it, not separately.
@@ -146,7 +157,14 @@ decimation, because collapse cannot merge across island seams. `level_01` additi
 lights everything brightly (sky-based ambient IBL + directional + filmic tonemap), which
 flattens baked shading further.
 
-**Default to flat-shaded props here.** Both variants of the tree are in
+**For a multi-coloured asset, the third option beats both.** The knight and sword are
+generated *textured*, then the albedo is baked down to vertex colours and the UVs deleted,
+which removes the decimation floor entirely — the knight is 2.7k triangles with its steel,
+blue tabard and gold trim intact, and no embedded texture at all. That path needs the
+import script above. Use it whenever a prop has more than two colour regions; the
+height-split flat-material trick only works on things as simple as a tree.
+
+**Otherwise default to flat-shaded props here.** Both variants of the tree are in
 `assets/models/`; switching is a one-line `ext_resource` change in
 `entities/tree/tree.tscn`.
 

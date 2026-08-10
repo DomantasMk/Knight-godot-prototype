@@ -4,8 +4,10 @@ A 3D knight prototype: third-person melee against a fixed, Warcraft 3-style over
 camera, currently proving out one loop — walk up to a thing, swing at it, watch it break.
 
 **Decisions**
-- Everything visible is greybox primitives (capsules, boxes, cylinders) — no art pipeline
-  yet, so feel can be tuned without waiting on assets.
+- The tree, the knight, and its sword are generated low-poly models (image-to-3D, then
+  decimated); anything not yet replaced is still greybox primitives. The models are art
+  placeholders in the same spirit as the greybox — flat-shaded, unrigged, no animation —
+  so feel is still tuned without waiting on a real art pipeline.
 - Feedback over fidelity: hits read through emission flash, squash, and tween-driven
   motion rather than animation clips. There is no `AnimationPlayer` in the project yet.
 - Systems are built as reusable components (`systems/components/`) from the start, so the

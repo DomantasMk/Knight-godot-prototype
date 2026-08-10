@@ -23,6 +23,11 @@ each one was paid for by a bug.
 **Materials**
 - A `PrimitiveMesh`'s material is shared by every instance of the scene. `duplicate()` it
   into a `material_override` before animating, or hitting one tree lights the whole forest.
+- A GLB whose colour is in vertex colours imports **white**: Godot's glTF importer reads
+  `COLOR_0` but never sets `vertex_color_use_as_albedo`. Point the asset's `.import` at
+  `tools/import/vertex_color_material.gd`, which flips it once at import time.
+- Deleting a `.glb.import` to force a reimport mints a **new UID**, silently orphaning the
+  `ext_resource` in every scene that instanced it. Edit the file instead.
 
 **Signals** — cross-system goes on `EventBus`; within one scene, connect directly.
 
