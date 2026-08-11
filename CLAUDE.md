@@ -131,6 +131,12 @@ what to change per character, and the trap list. Importing a finished GLB (rigge
 the **`generated-3d-assets`** skill. Invoke them rather than reconstructing the commands;
 several steps in both fail silently.
 
+That pipeline **runs its first four stages in subagents** — `character-mesh-rig` and
+`character-clip-author`, defined in `.claude/agents/`. This is not a style preference: a full
+run is ~170 requests and three of the first five attempts hit 225–246k against a 200k limit.
+The generation and tuning loops belong in their own windows; the main thread orchestrates and
+does Stage 5. The skill carries the briefs and the budget rule.
+
 ### Playtesting the running game — on request only
 
 `tools/playtest/` boots a scene in a real window, drives it with scripted Input Map
