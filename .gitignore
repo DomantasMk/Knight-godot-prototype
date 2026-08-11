@@ -43,6 +43,10 @@ Thumbs.db
 # and personal setup detail, which is exactly why it stays out of the repo.
 local/
 
+# Byte-cache from the headless Blender / Python tools in tools/rigging/.
+__pycache__/
+*.pyc
+
 # Claude Code: settings.json is shared, settings.local.json holds this machine's
 # tool paths (GODOT_BIN etc.) and stays out of the repo for the same reason.
 .claude/settings.local.json

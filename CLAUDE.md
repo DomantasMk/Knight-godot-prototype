@@ -20,6 +20,7 @@ each file is the footnote you open only when working in that area.
 | [level-01](context/level-01.md) | The main scene is a **demo harness**, not a designed level: 40×40 floor, road, player at `(0,0.1,8)`, 26 trees scattered at runtime from a fixed seed. Replace freely. |
 | [combat](context/combat.md) | Damage = Hitbox (deals, on `strike()` only) → Hurtbox (receives) → Health (stores), composed per entity. Includes the 3D physics layer table. |
 | [camera-and-movement](context/camera-and-movement.md) | Fixed 56° follow camera, no player control; WASD is camera-relative, so the two are one system. Camera must be a **sibling** of the player. |
+| [animation](context/animation.md) | Rigged knight, 4 in-place clips authored on the rig (no retarget). `AnimationTree` `root_node` must point at the **model**; loop modes and the impact track come from the import script. |
 | [conventions](context/conventions.md) | Recurring rules: hand-written `.tscn` `@export` caveat, Jolt uniform-scale rule, `1-exp(-k·dt)` smoothing, tween kill-before-restart, material duplication. |
 
 **Read** a note before changing that area — the gotchas are there because each one cost a bug.
@@ -99,10 +100,19 @@ These settings are already chosen and shape how new code should be written:
 
 ## Commands
 
-Godot is not on `PATH`. The binary paths are machine-specific, so they live in
-`.claude/settings.local.json` (gitignored) as `GODOT_BIN` and `GODOT_BIN_CONSOLE` rather
-than in this file — that keeps the repo machine-agnostic. Claude Code exports them into
-every session it spawns; set them yourself for a shell you opened by hand.
+None of this project's external tools are on `PATH`, and their paths are machine-specific, so
+they live in `.claude/settings.local.json` (gitignored) rather than in this file — that keeps
+the repo machine-agnostic. Claude Code exports them into every session it spawns; set them
+yourself for a shell you opened by hand.
+
+| Variable | Tool |
+|---|---|
+| `GODOT_BIN` / `GODOT_BIN_CONSOLE` | Godot; use the **console** build when you need stdout |
+| `BLENDER_BIN` | headless Blender, for `tools/rigging/bl_*.py` |
+| `HUNYUAN3D_DIR` / `HUNYUAN3D_PY` | image→mesh generation (user-level `hunyuan3d` skill) |
+| `SKINTOKENS_DIR` / `SKINTOKENS_PY` | mesh→rig auto-rigging (user-level `skintokens` skill) |
+
+**Never move one of these into `.claude/settings.json`** — that file is checked in and shared.
 
 ```powershell
 $godot = $env:GODOT_BIN                            # e.g. ...\Godot_v4.7.1-stable_win64.exe
@@ -112,6 +122,14 @@ $godot = $env:GODOT_BIN                            # e.g. ...\Godot_v4.7.1-stabl
 & $godot --path . --headless --import              # reimport / regenerate .godot
 & $godot --path . --headless --quit-after 60       # smoke-test: run 60 frames, print errors
 ```
+
+### Character art, rigging, and animation
+
+Bringing any new character from a mesh to an animated entity — or adding clips to an existing
+one — goes through the **`rigged-character-pipeline`** skill, which carries the five stages,
+what to change per character, and the trap list. Importing a finished GLB (rigged or not) is
+the **`generated-3d-assets`** skill. Invoke them rather than reconstructing the commands;
+several steps in both fail silently.
 
 ### Playtesting the running game — on request only
 

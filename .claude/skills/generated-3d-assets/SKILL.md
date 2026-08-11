@@ -71,6 +71,58 @@ Author assets with their origin at the base centre so the entity sits at y=0 wit
 transform on the `Model` node. If a model arrives origin-centred, fix it in the authoring
 tool rather than offsetting the node — a transform here fights the scatter code.
 
+## Rigged assets
+
+Worked example: `entities/player/` against `assets/models/knight_rigged.glb`.
+
+**If you are producing the rig and clips too, not just importing them, use the
+`rigged-character-pipeline` skill instead** — it covers all five stages and this is its last
+one. Everything below is the Godot side alone. Read `context/animation.md` first; per
+`CLAUDE.md`, also invoke `godot-prompter:animation-system` before touching an `AnimationTree`.
+
+**A model exported the ordinary way from Blender arrives facing backwards.** Blender
+characters face -Y, the glTF exporter writes that as +Z, and a `Node3D`'s forward is -Z. Fix
+it in the rig (`bl_normalize_rig.py` bakes the 180° into the mesh *and* the rest bones), never
+with a correction transform on `Visuals` or `Model` — a later asset fix then cancels against it.
+
+**Sockets are free if you bone-parent an empty in Blender.** Godot's glTF importer converts
+it into a `BoneAttachment3D`, so nothing has to be wired in `_ready()`. The generated node is
+named after the **bone**, and your empty is re-parented beneath it:
+
+```
+[node name="Sword" parent="Visuals/Model/Armature/Skeleton3D/RightHand/WeaponSocket" instance=ExtResource("4_sword")]
+```
+
+Give the attached node **no transform of its own** — the socket carries the whole grip, and a
+compensating transform here means the next re-export fights it. Descending into the instance
+this way needs an `[editable path="Visuals/Model"]` line at the end of the `.tscn`.
+
+**The `AnimationTree` goes in the entity scene, and its `root_node` must resolve to the
+model** — not to the entity root. Every bone track's path is relative to `root_node`; point it
+one level too high and all of them fail to resolve, with no error and no animation.
+
+```
+[node name="AnimationTree" type="AnimationTree" parent="."]
+unique_name_in_owner = true
+root_node = NodePath("../Visuals/Model")
+tree_root = SubResource("StateMachine_player")
+anim_player = NodePath("../Visuals/Model/AnimationPlayer")
+active = true
+```
+
+**glTF carries no loop modes and no event tracks.** Both go in the asset's import script
+(`tools/import/knight_rigged_import.gd` extends the vertex-colour one and adds them), *not*
+in the `.import` file's `_subresources` — a single animation entry there makes Godot rewrite
+`slice_1..slice_100` of defaults per clip on every reimport, 279 KB of churn in a 1.2 KB file.
+
+A Call Method track resolves its target through the **mixer's** `root_node`, which is the
+`AnimationTree`, which points at the model — so `NodePath("../..")` reaches the entity root.
+That path encodes the scene's shape; assert it rather than trusting it.
+
+Leave `animation/remove_immutable_tracks=false` when clips key every bone. A bone holding a
+constant *non-rest* value for a whole clip looks immutable, and dropping its track snaps that
+bone back to rest for the entire clip.
+
 ## Materials: the part that breaks silently
 
 The hit-flash needs a **per-instance** material copy, or striking one entity lights up
@@ -147,6 +199,21 @@ A clean headless run does **not** mean the asset looks right. Render actual fram
 
 Then open the last frame. Wrong-coloured, wrong-scaled, and white-flashed assets all
 pass the headless check.
+
+**Cheaper than a screenshot: assert it.** Screenshots cost ~250 tokens that then ride along
+for the whole session, so the checks a number can answer are scripted instead. The rigged
+knight has two gates, both exiting non-zero on failure — copy the shape for a new asset:
+
+```powershell
+& $godot --path . --headless --script res://tools/rigging/verify_rigged_import.gd   # the asset
+& $godot --path . --headless --script res://tools/rigging/verify_player_scene.gd    # the seam
+```
+
+The first checks per-surface vertex-colour albedo, bone names, clip durations and loop modes,
+and the impact track. The second instantiates the entity, walks it into the tree, advances the
+`AnimationTree` by hand through the attack clip and checks the strike actually fires — the
+kind of failure that plays perfectly and deals zero damage. Keep the picture for the questions
+a number cannot answer.
 
 ## Choosing flat vs textured in this project
 

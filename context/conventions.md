@@ -29,6 +29,15 @@ each one was paid for by a bug.
 - Deleting a `.glb.import` to force a reimport mints a **new UID**, silently orphaning the
   `ext_resource` in every scene that instanced it. Edit the file instead.
 
+**Rigged assets** — more in [animation](animation.md)
+- Bone-parent an empty in Blender and the glTF importer makes it a `BoneAttachment3D` for
+  free. It is named after the **bone**, with the empty re-parented beneath
+  (`Skeleton3D/RightHand/WeaponSocket`).
+- Anything glTF cannot carry — loop modes, event tracks — goes in the asset's **import
+  script**, never in the `.import` file's `_subresources`: one animation entry there makes
+  Godot rewrite `slice_1..slice_100` of defaults per clip on every reimport, 279 KB of churn
+  in a 1.2 KB file.
+
 **Signals** — cross-system goes on `EventBus`; within one scene, connect directly.
 
-_Files: every rule above is exercised in entities/tree/tree.gd_
+_Files: exercised in entities/tree/tree.gd, and for the rigged rules entities/player/_

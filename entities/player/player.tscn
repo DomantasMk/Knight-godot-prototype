@@ -1,8 +1,8 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://entities/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://systems/components/hitbox_component.gd" id="2_hitbox"]
-[ext_resource type="PackedScene" uid="uid://dwsa8otscagc8" path="res://assets/models/knight_lowpoly.glb" id="3_knight"]
+[ext_resource type="PackedScene" uid="uid://ckvx21cmop2sw" path="res://assets/models/knight_rigged.glb" id="3_knight"]
 [ext_resource type="PackedScene" uid="uid://cvy2ln14nbsuc" path="res://assets/models/sword_lowpoly.glb" id="4_sword"]
 
 [sub_resource type="CapsuleShape3D" id="Shape_body"]
@@ -11,6 +11,64 @@ height = 2.0
 
 [sub_resource type="SphereShape3D" id="Shape_hitbox"]
 radius = 1.1
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_idle"]
+animation = &"idle"
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_run"]
+animation = &"run"
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_attack"]
+animation = &"attack"
+
+[sub_resource type="AnimationNodeAnimation" id="Anim_roll"]
+animation = &"roll"
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_start_idle"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_idle_run"]
+xfade_time = 0.12
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_run_idle"]
+xfade_time = 0.12
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_idle_attack"]
+xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_run_attack"]
+xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_idle_roll"]
+xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_run_roll"]
+xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_attack_idle"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_attack_run"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_roll_idle"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_roll_run"]
+xfade_time = 0.15
+
+[sub_resource type="AnimationNodeStateMachine" id="StateMachine_player"]
+states/Start/position = Vector2(160, 120)
+states/End/position = Vector2(1000, 120)
+states/idle/node = SubResource("Anim_idle")
+states/idle/position = Vector2(380, 120)
+states/run/node = SubResource("Anim_run")
+states/run/position = Vector2(760, 120)
+states/attack/node = SubResource("Anim_attack")
+states/attack/position = Vector2(570, 260)
+states/roll/node = SubResource("Anim_roll")
+states/roll/position = Vector2(570, -20)
+transitions = ["Start", "idle", SubResource("Xfade_start_idle"), "idle", "run", SubResource("Xfade_idle_run"), "run", "idle", SubResource("Xfade_run_idle"), "idle", "attack", SubResource("Xfade_idle_attack"), "run", "attack", SubResource("Xfade_run_attack"), "idle", "roll", SubResource("Xfade_idle_roll"), "run", "roll", SubResource("Xfade_run_roll"), "attack", "idle", SubResource("Xfade_attack_idle"), "attack", "run", SubResource("Xfade_attack_run"), "roll", "idle", SubResource("Xfade_roll_idle"), "roll", "run", SubResource("Xfade_roll_run")]
+graph_offset = Vector2(-40, -100)
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -26,12 +84,14 @@ unique_name_in_owner = true
 
 [node name="Model" parent="Visuals" instance=ExtResource("3_knight")]
 
-[node name="WeaponPivot" type="Node3D" parent="."]
-unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+[node name="Sword" parent="Visuals/Model/Armature/Skeleton3D/RightHand/WeaponSocket" instance=ExtResource("4_sword")]
 
-[node name="Sword" parent="WeaponPivot" instance=ExtResource("4_sword")]
-transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.45, 0, 0)
+[node name="AnimationTree" type="AnimationTree" parent="."]
+unique_name_in_owner = true
+root_node = NodePath("../Visuals/Model")
+tree_root = SubResource("StateMachine_player")
+anim_player = NodePath("../Visuals/Model/AnimationPlayer")
+active = true
 
 [node name="Hitbox" type="Area3D" parent="."]
 unique_name_in_owner = true
@@ -43,3 +103,5 @@ script = ExtResource("2_hitbox")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hitbox"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -1)
 shape = SubResource("Shape_hitbox")
+
+[editable path="Visuals/Model"]

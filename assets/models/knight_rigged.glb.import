@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dwsa8otscagc8"
-path="res://.godot/imported/knight_lowpoly.glb-268c1283eacadfa0ca47ac57e089d73f.scn"
+uid="uid://ckvx21cmop2sw"
+path="res://.godot/imported/knight_rigged.glb-c436f82cdd134d87dc7850cf901bca99.scn"
 
 [deps]
 
-source_file="res://assets/models/knight_lowpoly.glb"
-dest_files=["res://.godot/imported/knight_lowpoly.glb-268c1283eacadfa0ca47ac57e089d73f.scn"]
+source_file="res://assets/models/knight_rigged.glb"
+dest_files=["res://.godot/imported/knight_rigged.glb-c436f82cdd134d87dc7850cf901bca99.scn"]
 
 [params]
 
@@ -33,9 +33,9 @@ skins/use_named_skins=true
 animation/import=true
 animation/fps=30
 animation/trimming=false
-animation/remove_immutable_tracks=true
+animation/remove_immutable_tracks=false
 animation/import_rest_as_RESET=false
-import_script/path="res://tools/import/vertex_color_material.gd"
+import_script/path="res://tools/import/knight_rigged_import.gd"
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
