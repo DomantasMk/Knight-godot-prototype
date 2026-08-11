@@ -2,14 +2,14 @@ extends CharacterBody3D
 
 ## The knight. WASD moves relative to the camera, the body turns to face the
 ## direction of travel, LMB swings a forward arc that damages whatever is inside
-## the Hitbox at the moment of impact, and Space rolls.
+## the Hitbox at the moment of impact, Shift rolls, and Space hops.
 ##
 ## Gameplay state is the State enum below. The AnimationTree runs its own state
 ## machine in parallel and is only ever *told* which state to show - it never
-## decides anything. Four states keep the enum form the right call; revisit if
-## this grows past ~5 or the states start needing real enter/exit logic.
+## decides anything. Five states is the ceiling this form was given; the next one
+## that needs real enter/exit logic should push the lot into node-based states.
 
-enum State { IDLE, RUN, ATTACK, ROLL }
+enum State { IDLE, RUN, ATTACK, ROLL, JUMP }
 
 ## Clip name per gameplay state. The AnimationTree's states are named to match.
 const ANIM_NAMES := {
@@ -17,6 +17,7 @@ const ANIM_NAMES := {
 	State.RUN: &"run",
 	State.ATTACK: &"attack",
 	State.ROLL: &"roll",
+	State.JUMP: &"jump",
 }
 
 @export var move_speed: float = 6.0
@@ -31,10 +32,26 @@ const ANIM_NAMES := {
 @export var roll_speed: float = 11.0
 @export var roll_duration: float = 0.7
 @export var roll_cooldown: float = 0.8
+## Apex of the hop, in metres. Deliberately short: the camera looks down at 56 degrees,
+## which foreshortens vertical motion to about half its size on screen, and anything
+## taller starts to read as a leap the knight has no business making in armour.
+## The measured apex runs ~4 cm over this at 60 Hz - that is what integrating gravity in
+## discrete steps costs, not a mistuning, and it scales with the physics tick.
+@export var jump_height: float = 0.8
+## Multiplies real gravity. 9.8 m/s^2 gives a jump of any readable height an airtime
+## near a second, which floats; 1.8x keeps the same 0.8 m arc down to 0.60 s.
+## Changing either this or jump_height desyncs the jump clip - see _jump_airtime().
+@export var gravity_scale: float = 1.8
+## How much of the ground acceleration steers the hop. Air control at 1.0 makes the
+## jump a second way to walk; at 0.0 you cannot correct a jump at all.
+@export var air_control: float = 0.45
 
 @onready var _hitbox: HitboxComponent = %Hitbox
 
-var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+## Project gravity times gravity_scale, resolved in _ready() rather than here: a variable
+## initializer runs before the scene applies its @export values, so folding gravity_scale
+## in at this point would quietly ignore anything set in the inspector.
+var _gravity: float
 var _camera: Camera3D
 var _state: State = State.IDLE
 var _state_time: float = 0.0
@@ -47,9 +64,11 @@ var _playback: AnimationNodeStateMachinePlayback
 
 
 func _ready() -> void:
+	_gravity = ProjectSettings.get_setting("physics/3d/default_gravity") * gravity_scale
 	var tree: AnimationTree = %AnimationTree
 	_playback = tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
 	_playback.travel(ANIM_NAMES[_state])
+	_check_jump_clip(tree)
 	EventBus.player_spawned.emit(self)
 
 
@@ -69,6 +88,8 @@ func _physics_process(delta: float) -> void:
 			_drive_ground(direction, move_speed * attack_move_penalty, delta)
 		State.ROLL:
 			_drive_roll()
+		State.JUMP:
+			_drive_air(direction, delta)
 		_:
 			_drive_ground(direction, move_speed, delta)
 
@@ -76,7 +97,7 @@ func _physics_process(delta: float) -> void:
 
 
 ## Every transition lives here; each state decides only what may follow it.
-## Attack and Roll are locked - they ignore input until their timer expires.
+## Attack, Roll and Jump are locked - they ignore input until they are done.
 func _advance_state(direction: Vector3) -> void:
 	var next := _state
 
@@ -87,11 +108,19 @@ func _advance_state(direction: Vector3) -> void:
 		State.ROLL:
 			if _state_time >= roll_duration:
 				next = _ground_state(direction)
+		State.JUMP:
+			# Not a timer: the jump ends when the feet are back down. velocity.y is
+			# still positive on the frame the impulse is applied, while is_on_floor()
+			# has not been recomputed yet, so testing both needs no takeoff grace.
+			if is_on_floor() and velocity.y <= 0.0:
+				next = _ground_state(direction)
 		_:
 			if Input.is_action_just_pressed("dodge") and _roll_cooldown_left <= 0.0:
 				next = State.ROLL
 			elif Input.is_action_just_pressed("attack") and _attack_cooldown_left <= 0.0:
 				next = State.ATTACK
+			elif Input.is_action_just_pressed("jump") and is_on_floor():
+				next = State.JUMP
 			else:
 				next = _ground_state(direction)
 
@@ -121,6 +150,10 @@ func _enter_state(next: State, direction: Vector3) -> void:
 			# Snap rather than turn: the clip is in-place, so a roll that travels
 			# sideways while the body still faces forward reads as a slide.
 			rotation.y = _yaw_for(_roll_direction)
+		State.JUMP:
+			# Solved from the height rather than tuned as a velocity, so jump_height
+			# means metres and the clip stays in step with the arc through any edit.
+			velocity.y = sqrt(2.0 * _gravity * jump_height)
 
 	_playback.travel(ANIM_NAMES[next])
 
@@ -135,6 +168,20 @@ func _drive_ground(direction: Vector3, speed: float, delta: float) -> void:
 		horizontal = horizontal.move_toward(Vector3.ZERO, friction * delta)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
+
+
+## Airborne steering. Two differences from the ground: acceleration is scaled down, and
+## there is no friction - releasing the keys mid-hop keeps the momentum you left with
+## instead of stopping the knight dead in the air.
+func _drive_air(direction: Vector3, delta: float) -> void:
+	if direction == Vector3.ZERO:
+		return
+	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
+	horizontal = horizontal.move_toward(direction * move_speed,
+			acceleration * air_control * delta)
+	velocity.x = horizontal.x
+	velocity.z = horizontal.z
+	_face(direction, delta)
 
 
 func _drive_roll() -> void:
@@ -155,6 +202,28 @@ func deal_attack_damage() -> void:
 		return
 	_struck = true
 	_hitbox.strike()
+
+
+## Time from takeoff to touchdown. The jump clip is authored to exactly this, so the
+## landing pose arrives on the frame the feet do.
+func _jump_airtime() -> float:
+	return 2.0 * sqrt(2.0 * jump_height / _gravity)
+
+
+## Nothing connects the clip's length to the arc's, so retuning jump_height or
+## gravity_scale would quietly leave the knight touching down in a mid-air pose, or
+## holding the landing squash in the air. Cheap to say out loud, easy to miss by eye.
+func _check_jump_clip(tree: AnimationTree) -> void:
+	if not OS.is_debug_build():
+		return
+	var player := tree.get_node_or_null(tree.anim_player) as AnimationPlayer
+	if player == null or not player.has_animation(ANIM_NAMES[State.JUMP]):
+		return
+	var clip: float = player.get_animation(ANIM_NAMES[State.JUMP]).length
+	if absf(clip - _jump_airtime()) > 0.08:
+		push_warning(("jump clip is %.2fs but the hop lasts %.2fs - retime one to the " +
+				"other in tools/rigging/bl_author_anims.py (JUMP) or in the inspector")
+				% [clip, _jump_airtime()])
 
 
 ## WASD mapped into the camera's frame, flattened onto the ground plane.

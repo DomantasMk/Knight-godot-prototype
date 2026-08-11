@@ -22,15 +22,17 @@ extends SceneTree
 
 const SCENE := "res://entities/player/player.tscn"
 const SOCKET_PATH := "Visuals/Model/Armature/Skeleton3D/RightHand/WeaponSocket"
-const STATES := ["idle", "run", "attack", "roll"]
+const STATES := ["idle", "run", "attack", "roll", "jump"]
 ## Every transition player.gd's _advance_state() can ask for, plus the entry edge.
 const TRANSITIONS := [
 	["Start", "idle"],
 	["idle", "run"], ["run", "idle"],
 	["idle", "attack"], ["run", "attack"],
 	["idle", "roll"], ["run", "roll"],
+	["idle", "jump"], ["run", "jump"],
 	["attack", "idle"], ["attack", "run"],
 	["roll", "idle"], ["roll", "run"],
+	["jump", "idle"], ["jump", "run"],
 ]
 
 var _failures: PackedStringArray = []

@@ -27,6 +27,7 @@ const LOOP_MODES := {
 	&"run": Animation.LOOP_LINEAR,
 	&"attack": Animation.LOOP_NONE,
 	&"roll": Animation.LOOP_NONE,
+	&"jump": Animation.LOOP_NONE,
 }
 
 ## Frame 8 of 15 at 30 fps, straight out of bl_author_anims.py's ATTACK block: the pose where

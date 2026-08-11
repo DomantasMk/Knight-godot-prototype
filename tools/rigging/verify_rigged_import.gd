@@ -34,6 +34,7 @@ const EXPECTED_CLIPS := {
 	"run": Animation.LOOP_LINEAR,
 	"attack": Animation.LOOP_NONE,
 	"roll": Animation.LOOP_NONE,
+	"jump": Animation.LOOP_NONE,
 }
 const IMPACT_METHOD := &"deal_attack_damage"
 const IMPACT_TIME := 8.0 / 30.0

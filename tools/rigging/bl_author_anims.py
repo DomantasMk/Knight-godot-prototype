@@ -3,16 +3,24 @@
     blender -b -P bl_author_anims.py -- <normalized.glb> <animated.glb>
 
 Input is `knight_normalized.glb` from `bl_normalize_rig.py`, not the raw SkinTokens
-output. Every clip is authored here as scripted keyframes - there is no mocap library and
-no retarget step, because the motion is written directly onto the rig that will play it.
+output - **or this script's own output**, i.e. the shipped `assets/models/knight_rigged.glb`.
+Both carry the same normalized rest pose, and the second is the only one that still exists:
+`local/rigging/work/` is gitignored and was cleaned up after the knight shipped, which would
+otherwise make adding a fifth clip a full re-run from Stage 1 and a different knight. Any
+imported animation is therefore dropped on load - see `strip_animation()` for why that is
+not merely tidiness.
 
-Four clips, one Action each, stashed on NLA tracks so both the glTF exporter (Animation
+Every clip is authored here as scripted keyframes - there is no mocap library and no
+retarget step, because the motion is written directly onto the rig that will play it.
+
+Five clips, one Action each, stashed on NLA tracks so both the glTF exporter (Animation
 Mode = Actions) and `bl_anim_contact_sheet.py` can find them:
 
     idle    2.0s  loop    breathing, weight shift, the sword arm drifting
     run     0.6s  loop    contact / down / airborne, twice, sides exchanged
     attack  0.5s  once    wind-up over the right shoulder, diagonal slash, follow-through
     roll    0.7s  once    tuck, a full forward revolution, recover
+    jump    0.6s  once    push-off, extension, knees up at apex, reach down, land absorbed
 
 **All clips are in-place.** Translation stays driven by the velocity code in `player.gd`;
 the only translation authored here is the vertical bob of the Hips, which is animation, not
@@ -92,6 +100,31 @@ bpy.ops.import_scene.gltf(filepath=src)
 
 scene = bpy.context.scene
 scene.render.fps = FPS
+
+
+def strip_animation():
+    """Leave the rig exactly as an un-animated normalized rig would arrive.
+
+    Only does anything when the input is a previously animated GLB, and then it does three
+    things that all matter. Clearing `animation_data` drops the NLA tracks, or the export
+    would ship each clip twice. Removing the Actions frees their names, or `actions.new()`
+    would quietly hand back `idle.001` and the clip Godot looks up by name would not exist.
+    Resetting the pose bones matters most: the exporter samples every bone's location,
+    rotation and scale, so a channel this script never keys - every bone but the Hips, for
+    location - would otherwise export whatever pose the importer happened to leave behind.
+    """
+    for obj in scene.objects:
+        if obj.animation_data is not None:
+            obj.animation_data_clear()
+    for action in list(bpy.data.actions):
+        bpy.data.actions.remove(action)
+    for obj in scene.objects:
+        if obj.type == "ARMATURE":
+            for bone in obj.pose.bones:
+                bone.matrix_basis.identity()
+
+
+strip_animation()
 
 arm = next((o for o in scene.objects if o.type == "ARMATURE"), None)
 mesh_obj = next((o for o in scene.objects if o.type == "MESH"), None)
@@ -439,11 +472,105 @@ ROLL = [
     (21, {"Hips": [("X", -360)]}),
 ]
 
+# --- jump: a short hop straight up. In place like everything else - the 0.8 m of travel is
+# player.gd's velocity, and the only translation here is the push-off and landing squash.
+#
+# 18 frames is 0.60 s, which is deliberately the airtime player.gd produces (0.8 m under
+# 1.8x gravity is 0.602 s), so the landing pose arrives on the frame the feet do. Retiming
+# one without the other lands the knight in a mid-air pose or holds the squash in the air.
+#
+# There is no crouch anticipation, on purpose: the impulse is applied on the frame Space
+# goes down, so a wind-up would show the knight sinking while he is already rising. Frame 0
+# is the tail of a push-off instead - the ankles and knees still extending - and the 0.06 s
+# crossfade in from idle/run covers it.
+JUMP = [
+    (0, {                                       # push-off: still folded, already extending
+        "Hips":          [("loc", (0.0, 0.0, -0.065))],
+        "Spine":         [("X", -7)],
+        "Chest":         [("X", -4)],
+        "LeftUpperLeg":  [("X", 12)],
+        "LeftLowerLeg":  [("X", -32)],
+        "LeftFoot":      [("X", 20)],
+        "RightUpperLeg": [("X", 12)],
+        "RightLowerLeg": [("X", -32)],
+        "RightFoot":     [("X", 20)],
+        "LeftUpperArm":  [("X", -24)],          # free arm back, about to throw upward
+        "LeftLowerArm":  [("X", -10)],
+        "RightUpperArm": [("X", -10)],
+    }),
+    (3, {                                       # extension: legs straight, toes pointed
+        "Hips":          [("loc", (0.0, 0.0, 0.02))],
+        "Spine":         [("X", 4)],
+        "Chest":         [("X", 3)],
+        "Neck":          [("X", -3)],
+        "LeftUpperLeg":  [("X", -10)],
+        "LeftLowerLeg":  [("X", -4)],
+        "LeftFoot":      [("X", -28)],
+        "RightUpperLeg": [("X", -10)],
+        "RightLowerLeg": [("X", -4)],
+        "RightFoot":     [("X", -28)],
+        "LeftUpperArm":  [("Y", 20), ("X", 34)],   # thrown up and forward
+        "LeftLowerArm":  [("X", 10)],
+        "RightUpperArm": [("Y", -14), ("X", 12)],  # the sword arm lifts, but only a little
+    }),
+    (9, {                                       # apex: knees up, scissored so it is not a squat
+        "Spine":         [("X", -6)],
+        "Chest":         [("X", -4)],
+        "Neck":          [("X", 4)],
+        "LeftUpperLeg":  [("X", 46)],
+        "LeftLowerLeg":  [("X", -84)],
+        "LeftFoot":      [("X", -12)],
+        "RightUpperLeg": [("X", 30)],
+        "RightLowerLeg": [("X", -98)],
+        "RightFoot":     [("X", -6)],
+        "LeftUpperArm":  [("Y", 12), ("X", 14)],
+        "LeftLowerArm":  [("X", 25)],
+        "RightUpperArm": [("Y", -8)],
+        "RightLowerArm": [("X", 6)],
+    }),
+    (13, {                                      # descent: still folded, starting to unfold
+        "Hips":          [("loc", (0.0, 0.0, 0.01))],
+        "Spine":         [("X", -3)],
+        "LeftUpperLeg":  [("X", 28)],
+        "LeftLowerLeg":  [("X", -52)],
+        "RightUpperLeg": [("X", 18)],
+        "RightLowerLeg": [("X", -60)],
+        "RightFoot":     [("X", 4)],
+        "LeftUpperArm":  [("Y", 6), ("X", -12)],
+        "RightUpperArm": [("Y", -4)],
+    }),
+    (16, {                                      # reach: nearly straight, one frame off contact
+        "LeftUpperLeg":  [("X", 6)],
+        "LeftLowerLeg":  [("X", -12)],
+        "LeftFoot":      [("X", 12)],
+        "RightUpperLeg": [("X", 4)],
+        "RightLowerLeg": [("X", -14)],
+        "RightFoot":     [("X", 12)],
+        "LeftUpperArm":  [("X", -20)],
+        "RightUpperArm": [("X", -6)],
+    }),
+    (18, {                                      # absorb: knees take the landing, hips drop
+        "Hips":          [("loc", (0.0, 0.0, -0.075))],
+        "Spine":         [("X", -10)],
+        "Chest":         [("X", -5)],
+        "LeftUpperLeg":  [("X", 14)],
+        "LeftLowerLeg":  [("X", -36)],
+        "LeftFoot":      [("X", 22)],
+        "RightUpperLeg": [("X", 14)],
+        "RightLowerLeg": [("X", -36)],
+        "RightFoot":     [("X", 22)],
+        "LeftUpperArm":  [("Y", -6), ("X", -14)],
+        "LeftLowerArm":  [("X", 14)],
+        "RightUpperArm": [("X", -4)],
+    }),
+]
+
 CLIPS = [
     ("idle", IDLE),
     ("run", RUN),
     ("attack", ATTACK),
     ("roll", ROLL),
+    ("jump", JUMP),
 ]
 
 

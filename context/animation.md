@@ -1,7 +1,7 @@
 # Animation
 
-The knight is rigged — 36 humanoid bones, four in-place clips (`idle`, `run`, `attack`,
-`roll`) authored as scripted keyframes by `tools/rigging/bl_author_anims.py`.
+The knight is rigged — 36 humanoid bones, five in-place clips (`idle`, `run`, `attack`,
+`roll`, `jump`) authored as scripted keyframes by `tools/rigging/bl_author_anims.py`.
 
 **Decisions**
 - Motion is **authored directly on the rig**, so retargeting is off the critical path: no

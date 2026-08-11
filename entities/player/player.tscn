@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=28 format=3]
 
 [ext_resource type="Script" path="res://entities/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://systems/components/hitbox_component.gd" id="2_hitbox"]
@@ -24,6 +24,9 @@ animation = &"attack"
 [sub_resource type="AnimationNodeAnimation" id="Anim_roll"]
 animation = &"roll"
 
+[sub_resource type="AnimationNodeAnimation" id="Anim_jump"]
+animation = &"jump"
+
 [sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_start_idle"]
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_idle_run"]
@@ -43,6 +46,18 @@ xfade_time = 0.06
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_run_roll"]
 xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_idle_jump"]
+xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_run_jump"]
+xfade_time = 0.06
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_jump_idle"]
+xfade_time = 0.12
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_jump_run"]
+xfade_time = 0.12
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="Xfade_attack_idle"]
 xfade_time = 0.15
@@ -67,7 +82,9 @@ states/attack/node = SubResource("Anim_attack")
 states/attack/position = Vector2(570, 260)
 states/roll/node = SubResource("Anim_roll")
 states/roll/position = Vector2(570, -20)
-transitions = ["Start", "idle", SubResource("Xfade_start_idle"), "idle", "run", SubResource("Xfade_idle_run"), "run", "idle", SubResource("Xfade_run_idle"), "idle", "attack", SubResource("Xfade_idle_attack"), "run", "attack", SubResource("Xfade_run_attack"), "idle", "roll", SubResource("Xfade_idle_roll"), "run", "roll", SubResource("Xfade_run_roll"), "attack", "idle", SubResource("Xfade_attack_idle"), "attack", "run", SubResource("Xfade_attack_run"), "roll", "idle", SubResource("Xfade_roll_idle"), "roll", "run", SubResource("Xfade_roll_run")]
+states/jump/node = SubResource("Anim_jump")
+states/jump/position = Vector2(570, 380)
+transitions = ["Start", "idle", SubResource("Xfade_start_idle"), "idle", "run", SubResource("Xfade_idle_run"), "run", "idle", SubResource("Xfade_run_idle"), "idle", "attack", SubResource("Xfade_idle_attack"), "run", "attack", SubResource("Xfade_run_attack"), "idle", "roll", SubResource("Xfade_idle_roll"), "run", "roll", SubResource("Xfade_run_roll"), "idle", "jump", SubResource("Xfade_idle_jump"), "run", "jump", SubResource("Xfade_run_jump"), "attack", "idle", SubResource("Xfade_attack_idle"), "attack", "run", SubResource("Xfade_attack_run"), "roll", "idle", SubResource("Xfade_roll_idle"), "roll", "run", SubResource("Xfade_roll_run"), "jump", "idle", SubResource("Xfade_jump_idle"), "jump", "run", SubResource("Xfade_jump_run")]
 graph_offset = Vector2(-40, -100)
 
 [node name="Player" type="CharacterBody3D"]

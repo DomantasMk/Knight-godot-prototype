@@ -133,13 +133,20 @@ assets/models/<name>.glb    Stage 5   the repo, with its own .import and UID
 ```
 
 **Do not delete `local/rigging/work/` when a character ships.** The knight's intermediates were
-cleaned up, and that made every downstream change — retuning a clip, adding one, or even
-verifying a refactor of the authoring script — a full re-run from Stage 1. Keeping them is
-free; the directory is gitignored.
+cleaned up, which looked like it made every downstream change a full re-run from Stage 1 —
+i.e. a different mesh, a different rig, a different knight. Keeping them is free; the
+directory is gitignored.
+
+**The knight is not stuck, though**, and no character with a shipped GLB is. `assets/models/
+knight_rigged.glb` *is* a normalized rig — Stage 3's output plus clips — so
+`bl_author_anims.py` takes it as its own input and `strip_animation()` drops the previous
+run's Actions on load. Re-authoring from it reproduced all four original clips with identical
+report numbers and a glTF diff of exactly one added animation, which is what makes it safe to
+trust. This is how `jump` was added.
 
 | What you want | Re-run | Delegate to |
 |---|---|---|
-| Tune a pose, retime a clip | 4 → 5. Input is `_normalized.glb`. | `character-clip-author` |
+| Tune a pose, retime a clip | 4 → 5. Input is `_normalized.glb`, or the shipped GLB. | `character-clip-author` |
 | **Add a clip** to an existing character | 4 → 5, then add the state to the AnimationTree, the clip to `LOOP_MODES` in the asset's import script, and the name to both `verify_*.gd` constant lists. Four places; missing any one fails silently. | `character-clip-author`, then you |
 | Move the weapon socket, fix bone rolls | 3 → 5. Stage 4's poses are expressed in world axes, so they mostly survive a re-normalize — but re-read the printed numbers, do not assume. | `character-mesh-rig`, then `character-clip-author` |
 | Re-rig (bad skeleton, re-roll sampling) | 2 → 5. | both |
@@ -184,7 +191,7 @@ context. Splitting the constants into a small per-character spec module the scri
 would shrink that loop several-fold, as would having the script assert its gate ranges and
 exit non-zero rather than printing numbers for a human to judge.
 
-Not done, because the knight's `_normalized.glb` no longer exists, so the refactor could not
-be verified against known-good output. **Do it at the start of the next character run**, while
-a fresh `_normalized.glb` is on disk and re-running the script proves the split changed
-nothing.
+Was blocked on having no known-good output to verify a refactor against. It no longer is:
+re-running the script on `assets/models/knight_rigged.glb` reproduces the shipped clips
+exactly, so the split can be proved to change nothing without a fresh `_normalized.glb`.
+**Do it before the next multi-clip pass**, whichever character that is for.
