@@ -37,6 +37,14 @@ Four things happen here, in this order, and the order matters:
    turns a bone-parented node into a `BoneAttachment3D` by itself, which is what lets the
    sword hang off a hand bone from a hand-written `.tscn` without editable children.
 
+   The socket is correct in Blender and **wrong in the file this writes**: the glTF exporter
+   converts a bone-parented object's translation to Y-up but writes its rotation verbatim in
+   Blender's Z-up frame. The repair deliberately is not here - Stage 4 reads this file back
+   into Blender, whose importer makes the same omission in reverse, so a file corrected at
+   this point would be mis-read there. It happens once, at the end of the last Blender step:
+   `bl_author_anims.py` -> `glb_fix_socket.py`, which is also where the reasoning is written
+   up in full.
+
 The vertex-colour material is rebuilt rather than trusted: COLOR_0 is this project's only
 albedo (see context/conventions.md) and several tools in the chain drop it quietly.
 """
@@ -302,9 +310,20 @@ bpy.context.view_layer.update()
 target = mathutils.Matrix.Translation(fist - blade * GRIP_INSET) @ socket_rot
 socket.matrix_world = target
 bpy.context.view_layer.update()
+
+# Assert the whole matrix, not the position the line below prints. Assigning matrix_world on
+# a bone-parented object is resolved through the bone's parent matrix, and the rotation is
+# both the half that a printed translation cannot show and the half everything downstream
+# depends on: it is the direction the blade leaves the fist in.
+drift = max(abs(a - b) for row_t, row_m in zip(target, socket.matrix_world)
+            for a, b in zip(row_t, row_m))
+if drift > 1e-5:
+    raise SystemExit(f"[rig] the socket did not land on its target (off by {drift:.5f})")
+
 print(f"[rig] WeaponSocket on RightHand at "
       f"{tuple(round(v, 3) for v in socket.matrix_world.translation)} "
-      f"(fist {tuple(round(v, 3) for v in fist)})")
+      f"(fist {tuple(round(v, 3) for v in fist)}), blade along "
+      f"{tuple(round(v, 3) for v in socket.matrix_world.col[1].to_3d())}")
 
 
 # --- 5. guarantee the vertex-colour albedo -------------------------------------

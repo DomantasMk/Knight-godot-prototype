@@ -73,11 +73,17 @@ feet and the direction the sword blade points. That is the cheap half of reviewi
 animation - it catches a foot through the floor or a sword swinging backwards without
 rendering anything. Run `bl_anim_contact_sheet.py` for the half numbers cannot answer.
 """
+import os
 import sys
 import math
 
 import bpy
 import mathutils
+
+# Blender does not put a `-P` script's own directory on sys.path, and the socket repair this
+# script ends with lives next door.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from glb_fix_socket import fix_socket                                          # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 src, dst = argv[0], argv[1]
@@ -150,9 +156,38 @@ def depth(name):
 
 
 ORDER = sorted(BONES, key=depth)                 # parents always posed before their children
-SOCKET_REST = socket.matrix_world.copy()
+
+# The socket's rest matrix is restated, not read off the imported empty. Blender's glTF
+# importer mis-reads a bone-parented node - `glb_fix_socket.py` has the whole story - and on
+# a re-run over this script's own repaired output, which is the documented way to add a clip,
+# the socket arrives lying on its side about 30 cm from the fist. The exported file is not
+# affected, since the matching exporter bug puts it back, but every blade direction and sword
+# tip reported below would be nonsense, and this report is the cheap half of the review.
+#
+# Restated is bl_normalize_rig.py's own rule: the fist is the midpoint between the hand bone
+# and its index-finger child - which is exactly where that script points the hand's tail, and
+# unlike a tail it survives the import, because the importer reinvents tails and keeps heads.
+GRIP_INSET = 0.18                                # must match bl_normalize_rig.py
+SOCKET_BLADE_UP = mathutils.Matrix((
+    (1.0, 0.0, 0.0),
+    (0.0, 0.0, -1.0),
+    (0.0, 1.0, 0.0),
+)).to_4x4()                                      # socket local +Y -> world +Z, i.e. blade up
+
+
+def head_of(bone):
+    return arm.matrix_world @ arm.data.bones[bone].head_local
+
+
+FIST = head_of("RightHand").lerp(head_of("RightIndexProximal"), 0.5)
+SOCKET_REST = mathutils.Matrix.Translation(FIST - WORLD["Z"] * GRIP_INSET) @ SOCKET_BLADE_UP
 print(f"[anim] {len(BONES)} bones, socket rest at "
       f"{tuple(round(v, 3) for v in SOCKET_REST.translation)}")
+_drift = (socket.matrix_world.translation - SOCKET_REST.translation).length
+if _drift > 0.001:
+    print(f"[anim] (the importer put the socket {_drift:.3f} m away, at "
+          f"{tuple(round(v, 3) for v in socket.matrix_world.translation)} - mis-read, "
+          f"not a rig problem; the export is unaffected)")
 
 
 # ------------------------------------------------------------------------------ pose math
@@ -661,3 +696,12 @@ bpy.ops.export_scene.gltf(
     export_reset_pose_bones=True,
 )
 print(f"[anim] wrote {dst}")
+
+# The exporter writes a bone-parented object's rotation in Blender's own Z-up frame while
+# converting its translation to Y-up, so the socket reaches Godot rotated 90 degrees about X:
+# blade out of the knight's back, grip inset dropping the sword below the hand rather than
+# into it. Repaired here because this is the last thing that touches the file - a corrected
+# GLB read back into Blender is mis-read by the matching importer bug, so the correction
+# cannot be made any earlier in the chain. The wanted orientation is stated rather than
+# measured off the scene for the same reason.
+fix_socket(dst)

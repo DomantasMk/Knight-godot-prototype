@@ -20,7 +20,7 @@ each file is the footnote you open only when working in that area.
 | [level-01](context/level-01.md) | The main scene is a **demo harness**, not a designed level: 40×40 floor, road, player at `(0,0.1,8)`, 26 trees scattered at runtime from a fixed seed. Replace freely. |
 | [combat](context/combat.md) | Damage = Hitbox (deals, on `strike()` only) → Hurtbox (receives) → Health (stores), composed per entity. Includes the 3D physics layer table. |
 | [camera-and-movement](context/camera-and-movement.md) | Fixed 56° follow camera, no player control; WASD is camera-relative, so the two are one system. Camera must be a **sibling** of the player. |
-| [animation](context/animation.md) | Rigged knight, 4 in-place clips authored on the rig (no retarget). `AnimationTree` `root_node` must point at the **model**; loop modes and the impact track come from the import script. |
+| [animation](context/animation.md) | Rigged knight, 5 in-place clips authored on the rig (no retarget). `AnimationTree` `root_node` must point at the **model**; loop modes, the impact track and the sword socket's rotation are all repaired after export. |
 | [conventions](context/conventions.md) | Recurring rules: hand-written `.tscn` `@export` caveat, Jolt uniform-scale rule, `1-exp(-k·dt)` smoothing, tween kill-before-restart, material duplication. |
 
 **Read** a note before changing that area — the gotchas are there because each one cost a bug.

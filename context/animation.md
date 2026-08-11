@@ -22,6 +22,9 @@ The knight is rigged — 36 humanoid bones, five in-place clips (`idle`, `run`, 
 - Keep `animation/remove_immutable_tracks=false`. Some bones hold a constant *non-rest* value
   for a whole clip (the right wrist's roll through `run`); dropped as "immutable", the wrist
   snaps to T-pose rest and the sword points wrong for the entire cycle.
+- The sword's grip is the `WeaponSocket` empty alone, and Blender exports its rotation wrong
+  — see [conventions](conventions.md). `verify_rigged_import.gd` asserts it: at rest the
+  socket is world-axis aligned, blade up its +Y. Never correct it in `player.tscn`.
 - `bl_normalize_rig.py` bakes the 180° Blender→Godot turn into the mesh and rest bones. Never
   add a correction transform in the scene, or the two cancel and the knight moonwalks.
 - Assert, don't eyeball: `tools/rigging/verify_rigged_import.gd` covers the asset,

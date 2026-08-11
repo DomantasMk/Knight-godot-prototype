@@ -22,8 +22,9 @@ extends SceneTree
 ##   which the `.import` file has to point at - an unwired import script fails silently.
 ## - The impact track itself. glTF cannot carry an event track, so if this one goes missing
 ##   the swing plays perfectly and deals no damage at all.
-## - The BoneAttachment3D that Godot generates from the bone-parented `WeaponSocket` empty.
-##   Without it there is nothing to hang the sword from.
+## - The BoneAttachment3D that Godot generates from the bone-parented `WeaponSocket` empty,
+##   and the socket's **orientation**, which Blender's exporter gets wrong: without the
+##   repair the sword points out of the knight's back and hangs below the hand.
 ##
 ## The other half of the gate - that the track's path still resolves to the player and that
 ## the hit actually lands - is `verify_player_scene.gd`, because it is a scene fact.
@@ -38,6 +39,8 @@ const EXPECTED_CLIPS := {
 }
 const IMPACT_METHOD := &"deal_attack_damage"
 const IMPACT_TIME := 8.0 / 30.0
+const SOCKET := &"WeaponSocket"
+const SOCKET_TOLERANCE := 0.001
 
 var _failures: PackedStringArray = []
 
@@ -147,12 +150,42 @@ func _check_impact_track(attack: Animation) -> void:
 			".import file, the swing will deal zero damage") % IMPACT_METHOD)
 
 
+## Existence is the cheap half; the orientation is the half that shipped broken once.
+##
+## Godot reads a GLB literally, and Blender's exporter writes a bone-parented node's rotation
+## in its own Z-up frame while converting everything around it to Y-up. The socket therefore
+## arrives 90 degrees about X out of true unless tools/rigging/glb_fix_socket.py has been run
+## over the file: the blade points out of the knight's back and the 0.18 m grip inset drops
+## the sword below the hand instead of into it. Nothing errors and every clip still plays.
+##
+## Identity is the whole contract - in the rest pose the socket is world-axis aligned: blade
+## up its own +Y, the flat of the blade facing the character's side.
 func _check_socket(root: Node) -> void:
 	for node in _walk(root):
 		var attachment := node as BoneAttachment3D
-		if attachment != null:
-			print("[verify] %s -> bone %s" % [attachment.name, attachment.bone_name])
+		if attachment == null:
+			continue
+		print("[verify] %s -> bone %s" % [attachment.name, attachment.bone_name])
+
+		var socket := attachment.get_node_or_null(NodePath(SOCKET)) as Node3D
+		if socket == null:
+			_fail("no %s under %s" % [SOCKET, attachment.name])
 			return
+		var skeleton := attachment.get_parent() as Skeleton3D
+		if skeleton == null:
+			_fail("%s is not a child of a Skeleton3D" % attachment.name)
+			return
+		var bone := skeleton.find_bone(attachment.bone_name)
+		var rest := skeleton.get_bone_global_rest(bone) * socket.transform
+		var basis := rest.basis.orthonormalized()
+
+		var drift := maxf((basis.x - Vector3.RIGHT).length(),
+				maxf((basis.y - Vector3.UP).length(), (basis.z - Vector3.BACK).length()))
+		if drift > SOCKET_TOLERANCE:
+			_fail(("%s is rotated %.3f off the rest pose (blade %v, wanted +Y) - run " +
+					"tools/rigging/glb_fix_socket.py over the GLB") % [SOCKET, drift, basis.y])
+		print("[verify] %s at rest: origin %v, blade %v" % [SOCKET, rest.origin, basis.y])
+		return
 	_fail("no BoneAttachment3D - the WeaponSocket empty did not survive import")
 
 
