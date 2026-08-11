@@ -4,12 +4,24 @@ You are the `character-clip-author` agent. Your input is
 `local/rigging/work/<name>_normalized.glb`; your output is `<name>_animated.glb` plus a short
 report. Read `stages/traps.md` before running Blender.
 
-Write **only** into `local/rigging/work/`. Never touch a tracked repo file. Keep the
-intermediates when you finish.
+The work splits across three files, and only the middle one is yours:
+
+| File | What it is |
+|---|---|
+| `tools/rigging/bl_author_anims.py` | the driver — pose maths, keyframe writer, report, export |
+| `tools/rigging/clips_<name>.py` | **the character's spec — this is the file you edit** |
+| `tools/rigging/pose_ops.py` | the shared vocabulary — `layered`, `swap_sides`, easing |
+
+GLBs and notes go in `local/rigging/work/`; keep the intermediates when you finish. The spec
+module is the one tracked file you may change.
 
 ```powershell
-& $env:BLENDER_BIN -b -P tools/rigging/bl_author_anims.py -- <normalized.glb> <animated.glb>
+& $env:BLENDER_BIN -b -P tools/rigging/bl_author_anims.py -- `
+    <normalized.glb> <animated.glb> <name>
 ```
+
+The third argument picks `clips_<name>.py` and defaults to `knight`. A new character starts by
+copying an existing spec to `clips_<name>.py`.
 
 Motion is written **directly onto the rig that will play it**, so there is no retargeting step
 at all: no BoneMap, no `SkeletonProfileHumanoid` mapping, no mocap library, no Blender
@@ -54,13 +66,31 @@ Stage 4 time went here; budget for it on any character holding something.
 
 ## Per character, edit
 
-`STANCE` and the clip constants (`IDLE`, `RUN`, `ATTACK`, `ROLL`), the `CLIPS` registry, and
-`SWORD_LENGTH` if the character holds something else. The `Pose` machinery, `swap_sides()`,
-`layered()` and the report are generic — leave them alone.
+Everything in `clips_<name>.py`: `STANCE`, the clip constants, the `CLIPS` registry, and
+`SWORD_LENGTH` if the character holds something else. The driver and `pose_ops.py` are generic
+— leave them alone.
 
 Clip names and durations come **from the orchestrator's brief**, because they become the
 AnimationTree's state names and the entity's state durations. Do not invent or rename them; if
 a duration cannot work, say so in the report rather than silently changing it.
+
+## Easing — only where a clip has a fastest frame
+
+A key is `(frame, delta)` or `(frame, delta, ease)`, and **`ease` describes the interval
+leaving that key**, matching Blender's own `keyframe_point.interpolation`. Omit it and Blender's
+auto-clamped Bezier applies: an ease-out *and* an ease-in on every pose.
+
+That default is right for `idle`, `run`, `roll` and `jump`. It is wrong for a strike, and
+measurably so: the exporter force-samples at 30 fps, so the easing is **baked into the file**,
+and the knight's first swing decelerated to 42 % of its peak speed by the frame it was supposed
+to connect on. No amount of re-posing fixes that — it is the interpolation, not the poses.
+
+    "CONSTANT"              a true hold — the beat that lets the eye read a wind-up
+    "LINEAR"                constant speed, for carrying a blade through an arc
+    ("EXPO", "EASE_IN")     accelerate into contact and never let up
+    ("EXPO", "EASE_OUT")    settle into a coil
+    ("BACK", "EASE_OUT")    overshoot past centre and come back
+    ("SINE", "EASE_OUT")    a gentle settle into a guard
 
 ## Review: numbers first, one picture second
 
@@ -74,6 +104,21 @@ character height you were given:
 - **run** — planted toe 0.05–0.10 (rest 0.05), swinging toe to 0.42, head bobs 1.50–1.58.
 - **attack** — tip travels back over the right shoulder, then down and across to front-left.
 - **roll** — head 1.56 → 0.05 → 0.36 → 1.56, minimum ~0.03. Never below the floor.
+
+**A pose report cannot see spacing.** It says where the blade is, never how fast it got there,
+and the knight's original swing passed every number above while landing its hit on the slowest
+frame of the strike. For any clip with a moment of contact, gate the *exported GLB*:
+
+```powershell
+python tools/rigging/blade_speed.py <animated.glb> --clip attack --impact <frame> --gates
+```
+
+It runs forward kinematics on the weapon socket, prints tip speed and travel per frame, and
+exits non-zero unless: impact lands at ≥ 85 % of peak tip speed; no three consecutive frames
+average under 0.10 m of tip travel between the coil apex and the end of the follow-through; the
+coil covers ≤ 60 % of the strike's distance; and the tip is inside the entity's hitbox on the
+impact frame. Read its `--help` before arguing with a verdict — the phase boundaries are
+derived from the speed curve, not hardcoded.
 
 Only then, for what numbers cannot answer:
 

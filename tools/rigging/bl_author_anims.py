@@ -1,78 +1,50 @@
-"""Blender headless: author the player's animation clips on the normalized rig.
+"""Blender headless: author a character's animation clips on its normalized rig.
 
-    blender -b -P bl_author_anims.py -- <normalized.glb> <animated.glb>
+    blender -b -P bl_author_anims.py -- <normalized.glb> <animated.glb> [spec]
 
-Input is `knight_normalized.glb` from `bl_normalize_rig.py`, not the raw SkinTokens
-output - **or this script's own output**, i.e. the shipped `assets/models/knight_rigged.glb`.
+`spec` names a `clips_<spec>.py` module next door and defaults to `knight`. **That module is
+where the per-character constants live** - the stance, the clip poses, the clip registry and
+the weapon length. This file is the machinery: the pose maths, the keyframe writer, the report
+and the export. Do not put a number about one character in here.
+
+The vocabulary those specs are written in - world axes, `twist`/`bend`, `loc`/`pivot`,
+layering, mirroring and the easing modes - is documented in `pose_ops.py`.
+
+Input is `<name>_normalized.glb` from `bl_normalize_rig.py`, not the raw SkinTokens
+output - **or this script's own output**, i.e. the shipped `assets/models/knight_rigged_v2.glb`.
 Both carry the same normalized rest pose, and the second is the only one that still exists:
 `local/rigging/work/` is gitignored and was cleaned up after the knight shipped, which would
 otherwise make adding a fifth clip a full re-run from Stage 1 and a different knight. Any
 imported animation is therefore dropped on load - see `strip_animation()` for why that is
 not merely tidiness.
 
-Every clip is authored here as scripted keyframes - there is no mocap library and no
-retarget step, because the motion is written directly onto the rig that will play it.
+Every clip is authored as scripted keyframes - there is no mocap library and no retarget
+step, because the motion is written directly onto the rig that will play it. One Action each,
+stashed on NLA tracks so both the glTF exporter (Animation Mode = Actions) and
+`bl_anim_contact_sheet.py` can find them.
 
-Five clips, one Action each, stashed on NLA tracks so both the glTF exporter (Animation
-Mode = Actions) and `bl_anim_contact_sheet.py` can find them:
+## How a pose becomes a keyframe
 
-    idle    2.0s  loop    breathing, weight shift, the sword arm drifting
-    run     0.6s  loop    contact / down / airborne, twice, sides exchanged
-    attack  0.5s  once    wind-up over the right shoulder, diagonal slash, follow-through
-    roll    0.7s  once    tuck, a full forward revolution, recover
-    jump    0.6s  once    push-off, extension, knees up at apex, reach down, land absorbed
-
-**All clips are in-place.** Translation stays driven by the velocity code in `player.gd`;
-the only translation authored here is the vertical bob of the Hips, which is animation, not
-travel.
-
-## Why poses are written as world axes
-
-`bl_normalize_rig.py` guarantees one invariant: every bone's local Z faces the character's
-front. Local Y runs along the bone, so local X - the flexion axis - falls out of the bone's
-own direction and therefore points a *different world direction on every bone*: world -X on
-the spine, +X on the legs, and roughly vertical on the arms. Writing poses as raw local
-angles needs a fresh sign convention per bone and is how a day gets lost.
-
-So a pose here is a list of rotations about **world** axes, and `Pose.rotate` converts each
-one into the bone's local frame. World axes have one meaning each, for every bone:
-
-    +X  sagittal    forward/back swing. Rotating a joint about +X moves everything
-                    *below* it forward and everything *above* it backward - so a thigh
-                    swings forward on +X, a spine leans forward on -X, a knee flexes on -X.
-    +Y  frontal     raise/lower and side bend. +Y raises the left arm and lowers the right.
-    +Z  transverse  twist - pelvis and shoulder counter-rotation, toe-in/toe-out.
-
-This goes one step further than the helper sketched in the handoff, which read the axis off
-the bone's *rest* matrix. That is only a world axis while the bone's parents are unposed:
-once the shoulder is rotated 70 degrees to bring the arm down out of its T-pose, the
-forearm's rest X is no longer world X, and "bend the elbow forward" stops meaning that.
-`Pose` therefore carries the accumulated pose down the chain, so an axis named here is the
-true world axis no matter what the parents are doing. Two extra axis names cover what world
-axes cannot say:
-
-    twist   about the bone's own current direction - a wrist roll, an axial arm roll
-    bend    about the bone's own current local X - the normalizer's flexion axis
-
-The rest pose is a **T-pose**, so every clip starts from STANCE, which brings the arms down
-and puts the sword up in a ready guard. Clip poses are deltas layered on top of it: their
-ops are appended, and since each op is about a world axis they compose in the order listed.
-
-## Mirroring
-
-Left/right pairs take the *same* sign about world X and *opposite* signs about Y and Z,
-because the mirror plane is the character's own sagittal plane. `swap_sides()` applies that
-to the run cycle, whose second half really is its first half with the sides exchanged.
-Nothing else is mirrored: the stance is deliberately asymmetric, since the sword is in the
-right hand.
+`Pose` goes one step further than reading an axis off the bone's *rest* matrix. That is only
+a world axis while the bone's parents are unposed: once the shoulder is rotated 70 degrees to
+bring the arm down out of its T-pose, the forearm's rest X is no longer world X, and "bend the
+elbow forward" stops meaning that. `Pose` therefore carries the accumulated pose down the
+chain, so an axis named in a spec is the true world axis no matter what the parents are doing.
 
 ## Reading the report
 
 The script prints, for every keyframe it writes, the world position of the head, hands and
 feet and the direction the sword blade points. That is the cheap half of reviewing an
 animation - it catches a foot through the floor or a sword swinging backwards without
-rendering anything. Run `bl_anim_contact_sheet.py` for the half numbers cannot answer.
+rendering anything.
+
+It is only half, though, and the missing half is **spacing**: a pose report says where the
+blade is, never how fast it got there. The knight's first swing passed every pose check and
+still landed its hit on the slowest frame of the strike. Run
+`tools/rigging/blade_speed.py --gates` on the exported GLB for that, and
+`bl_anim_contact_sheet.py` for the half numbers cannot answer at all.
 """
+import importlib
 import os
 import sys
 import math
@@ -81,12 +53,15 @@ import bpy
 import mathutils
 
 # Blender does not put a `-P` script's own directory on sys.path, and the socket repair this
-# script ends with lives next door.
+# script ends with - plus the pose helpers and the clip spec - all live next door.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from glb_fix_socket import fix_socket                                          # noqa: E402
+from pose_ops import layered, unpack_key                                       # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 src, dst = argv[0], argv[1]
+spec_name = argv[2] if len(argv) > 2 else "knight"
+spec = importlib.import_module(f"clips_{spec_name}")
 
 FPS = 30
 IDENTITY = mathutils.Quaternion()
@@ -96,8 +71,9 @@ WORLD = {
     "Y": mathutils.Vector((0.0, 1.0, 0.0)),     # character's front
     "Z": mathutils.Vector((0.0, 0.0, 1.0)),     # up
 }
-# sword_lowpoly.glb is 1.0 m from pommel butt to tip, blade along the socket's local +Y.
-SWORD_LENGTH = 1.0
+STANCE = spec.STANCE
+CLIPS = spec.CLIPS
+SWORD_LENGTH = spec.SWORD_LENGTH
 
 
 # ---------------------------------------------------------------------------- rig loading
@@ -253,360 +229,12 @@ class Pose:
                                                 math.radians(value)) @ q
 
 
-def layered(*layers):
-    """Stack pose layers: a bone's ops from each layer run in the order the layers are given."""
-    out = {}
-    for layer in layers:
-        for bone, ops in layer.items():
-            out.setdefault(bone, []).extend(ops)
-    return out
-
-
-def build(spec):
+def build(pose_spec):
     pose = Pose()
     for name in ORDER:
-        if name in spec:
-            pose.rotate(name, spec[name])
+        if name in pose_spec:
+            pose.rotate(name, pose_spec[name])
     return pose
-
-
-def swap_sides(delta):
-    """Exchange the character's left and right - the run's second half is its first.
-
-    Reflecting through the sagittal plane leaves a sagittal (world X) rotation alone and
-    reverses everything else, along with any sideways offset. Only the run uses this; the
-    stance is asymmetric on purpose.
-    """
-    out = {}
-    for bone, ops in delta.items():
-        name = bone.replace("Left", "\0").replace("Right", "Left").replace("\0", "Right")
-        flipped = []
-        for kind, value in ops:
-            if kind in ("loc", "pivot"):
-                flipped.append((kind, (-value[0], value[1], value[2])))
-            elif kind == "X":
-                flipped.append((kind, value))
-            else:
-                flipped.append((kind, -value))
-        out[name] = flipped
-    return out
-
-
-# -------------------------------------------------------------------------------- the poses
-# The rest pose is a T-pose. STANCE is the character standing: arms brought down out of the
-# T, the sword arm folded up into a guard with the blade vertical. Every clip layers on it.
-#
-# The right arm is the fiddly one. The socket's blade axis is perpendicular to the forearm
-# (that is how a fist holds a grip), so a blade cannot point up while the arm hangs - it
-# needs the elbow folded until the forearm is roughly horizontal, and then a wrist roll to
-# bring the blade off horizontal and up. -90 is that roll; the residual tilt is about 1 deg.
-STANCE = {
-    "Spine":         [("X", -2)],
-    "Chest":         [("X", -2)],
-    "Neck":          [("X", 3)],
-
-    "LeftUpperArm":  [("Y", -66), ("X", 6)],
-    "LeftLowerArm":  [("X", 28)],
-    "LeftHand":      [("twist", 15)],
-
-    "RightUpperArm": [("Y", 62), ("X", 8)],
-    "RightLowerArm": [("X", 80)],
-    "RightHand":     [("twist", -90)],
-
-    "LeftUpperLeg":  [("X", 2)],
-    "LeftLowerLeg":  [("X", -6)],
-    "LeftFoot":      [("X", 4)],
-    "RightUpperLeg": [("X", 2)],
-    "RightLowerLeg": [("X", -6)],
-    "RightFoot":     [("X", 4)],
-}
-
-# --- idle: a 2 s breath. Small, but not so small it reads as a frozen mesh under a
-# camera that never moves. The sword arm drifts on its own cycle so the two never line up.
-IDLE = [
-    (0, {}),
-    (15, {
-        "Spine":         [("X", 3)],
-        "Chest":         [("X", 3)],
-        "Neck":          [("X", -2)],
-        "LeftUpperArm":  [("Y", -4)],
-        "RightUpperArm": [("Y", 3), ("X", -4)],
-        "Hips":          [("loc", (0.0, 0.0, 0.014))],
-    }),
-    (30, {
-        "Spine":         [("X", -2)],
-        "Chest":         [("X", -1)],
-        "Hips":          [("Z", -3), ("loc", (0.008, 0.0, -0.006))],
-        "LeftUpperArm":  [("X", 4)],
-        "RightUpperArm": [("X", -6)],
-        "RightLowerArm": [("X", 5)],
-    }),
-    (45, {
-        "Spine":         [("X", 2)],
-        "Chest":         [("X", 2)],
-        "Neck":          [("X", -1)],
-        "Hips":          [("Z", 2), ("loc", (-0.004, 0.0, 0.008))],
-        "LeftUpperArm":  [("Y", -2)],
-        "RightUpperArm": [("Y", 2), ("X", -2)],
-    }),
-    (60, {}),
-]
-
-# --- run: contact / down / airborne, then the same three with the sides exchanged.
-# The sword arm swings less than the free arm - it is carrying a metre of steel.
-#
-# Swinging a straight leg forward lifts the foot faster than intuition suggests - the hip
-# is only 0.88 m up and the leg is 0.74 m, so 34 degrees of thigh puts the foot 13 cm off
-# the ground. With no root motion and no foot IK the planted foot slides anyway, so the
-# bar here is simply that it must not visibly float: the report keeps the planted toe
-# within a few centimetres of its rest height, and the amplitudes below are what that costs.
-RUN_CONTACT = {
-    "Hips":          [("Z", -7), ("loc", (0.0, 0.0, -0.008))],
-    "Spine":         [("X", -9)],
-    "Chest":         [("X", -3), ("Z", 14)],
-    "LeftUpperLeg":  [("X", 22)],
-    "LeftLowerLeg":  [("X", -10)],
-    "LeftFoot":      [("X", 2)],
-    "RightUpperLeg": [("X", -26)],
-    "RightLowerLeg": [("X", -40)],
-    "RightFoot":     [("X", 22)],
-    "LeftUpperArm":  [("X", -34)],
-    "LeftLowerArm":  [("X", 22)],
-    "RightUpperArm": [("X", 20)],
-    "RightLowerArm": [("X", -14)],
-}
-RUN_DOWN = {
-    "Hips":          [("Z", -3), ("loc", (0.0, 0.0, -0.035))],
-    "Spine":         [("X", -11)],
-    "Chest":         [("X", -3), ("Z", 7)],
-    "LeftUpperLeg":  [("X", 6)],
-    "LeftLowerLeg":  [("X", -22)],
-    "LeftFoot":      [("X", 14)],
-    "RightUpperLeg": [("X", -32)],
-    "RightLowerLeg": [("X", -58)],
-    "RightFoot":     [("X", 28)],
-    "LeftUpperArm":  [("X", -18)],
-    "LeftLowerArm":  [("X", 30)],
-    "RightUpperArm": [("X", 10)],
-    "RightLowerArm": [("X", -6)],
-}
-RUN_AIR = {
-    "Hips":          [("Z", -5), ("loc", (0.0, 0.0, 0.045))],
-    "Spine":         [("X", -10)],
-    "Chest":         [("X", -3), ("Z", 11)],
-    "LeftUpperLeg":  [("X", -28)],
-    "LeftLowerLeg":  [("X", -46)],
-    "LeftFoot":      [("X", 26)],
-    "RightUpperLeg": [("X", 16)],
-    "RightLowerLeg": [("X", -66)],
-    "RightFoot":     [("X", 30)],
-    "LeftUpperArm":  [("X", -12)],
-    "LeftLowerArm":  [("X", 34)],
-    "RightUpperArm": [("X", 6)],
-    "RightLowerArm": [("X", -4)],
-}
-RUN = [
-    (0, RUN_CONTACT),
-    (3, RUN_DOWN),
-    (6, RUN_AIR),
-    (9, swap_sides(RUN_CONTACT)),
-    (12, swap_sides(RUN_DOWN)),
-    (15, swap_sides(RUN_AIR)),
-    (18, RUN_CONTACT),
-]
-
-# --- attack: a diagonal slash from over the right shoulder down across to the left.
-# Impact is frame 8 of 15, i.e. 0.267 s in - that is where the Call Method track calling
-# deal_attack_damage() goes when the clip is wired up in Godot.
-ATTACK = [
-    (0, {}),
-    (4, {                                       # wind-up: coiled right, sword high and back
-        "Hips":          [("Z", -14)],
-        "Spine":         [("X", 3), ("Z", -12)],
-        "Chest":         [("Z", -24)],
-        # Y -115 against the stance's +62 puts the arm well above horizontal; anything less
-        # and the wind-up just reads as the T-pose the rest pose already was. The +25 about
-        # X then takes it *back* over the shoulder rather than out to the side - world +X
-        # moves what is above a joint backward, and by now the arm is above the shoulder.
-        "RightUpperArm": [("Y", -115), ("X", 25)],
-        "RightLowerArm": [("X", -30)],
-        "RightHand":     [("twist", 40)],
-        "LeftUpperArm":  [("X", 30)],
-        "LeftLowerArm":  [("X", 15)],
-        "LeftUpperLeg":  [("X", -6)],
-        "RightUpperLeg": [("X", 6)],
-    }),
-    (8, {                                       # impact: uncoiled left, blade out front
-        "Hips":          [("Z", 14)],
-        "Spine":         [("X", -16), ("Z", 12)],
-        "Chest":         [("Z", 26)],
-        "RightUpperArm": [("Y", 26), ("X", 42)],
-        "RightLowerArm": [("X", -58)],
-        "RightHand":     [("twist", -72)],
-        "LeftUpperArm":  [("X", -28)],
-        "LeftLowerArm":  [("X", 10)],
-        "LeftUpperLeg":  [("X", 10)],
-        "RightUpperLeg": [("X", -8)],
-    }),
-    (11, {                                      # follow-through: the blade keeps going left
-        "Hips":          [("Z", 18)],
-        "Spine":         [("X", -20), ("Z", 16)],
-        "Chest":         [("Z", 34)],
-        "RightUpperArm": [("Y", 56), ("X", 22)],
-        "RightLowerArm": [("X", -70)],
-        "RightHand":     [("twist", -95)],
-        "LeftUpperArm":  [("X", -34)],
-        "LeftUpperLeg":  [("X", 12)],
-        "RightUpperLeg": [("X", -10)],
-    }),
-    (15, {}),
-]
-
-# --- roll: tuck into a ball and turn one full revolution forward.
-# A forward roll takes the head down and forward, and world +X moves what is *above* a
-# joint backward, so the revolution is about world -X. The clip is in-place, so the whole
-# turn comes from the Hips - pivoted so the body tumbles around ROLL_PIVOT, roughly the
-# centre of the tucked ball, instead of around the pelvis joint.
-ROLL_PIVOT = (0.0, 0.15, 0.90)
-TUCK = {
-    "Spine":         [("X", -28)],
-    "Chest":         [("X", -26)],
-    "UpperChest":    [("X", -18)],
-    "Neck":          [("X", -22)],
-    "Head":          [("X", -14)],
-    "LeftUpperLeg":  [("X", 112)],
-    "LeftLowerLeg":  [("X", -132)],
-    "LeftFoot":      [("X", 20)],
-    "RightUpperLeg": [("X", 112)],
-    "RightLowerLeg": [("X", -132)],
-    "RightFoot":     [("X", 20)],
-    "LeftUpperArm":  [("Y", -14), ("X", 46)],
-    "LeftLowerArm":  [("X", 60)],
-    "RightUpperArm": [("X", 40)],
-    "RightLowerArm": [("X", 20)],
-}
-
-
-def tumble(degrees, drop, tuck=1.0):
-    """The tucked body at `degrees` through the revolution, `drop` metres lower."""
-    scaled = {bone: [(kind, value * tuck) for kind, value in ops] for bone, ops in TUCK.items()}
-    return layered(scaled, {"Hips": [("X", degrees), ("pivot", ROLL_PIVOT),
-                                     ("loc", (0.0, 0.0, drop))]})
-
-
-# The last keyframe holds -360 rather than snapping back to 0: a key at 0 would make the
-# f-curve unwind the whole revolution backwards over the final frames. -360 and 0 are the
-# same orientation, and Godot's slerp handles the quaternion sign when blending out.
-ROLL = [
-    (0, {}),
-    (3, tumble(-30, -0.30, tuck=0.85)),
-    (7, tumble(-120, -0.42)),
-    (11, tumble(-210, -0.42)),
-    (15, tumble(-300, -0.38)),
-    (18, tumble(-345, -0.18, tuck=0.55)),
-    (21, {"Hips": [("X", -360)]}),
-]
-
-# --- jump: a short hop straight up. In place like everything else - the 0.8 m of travel is
-# player.gd's velocity, and the only translation here is the push-off and landing squash.
-#
-# 18 frames is 0.60 s, which is deliberately the airtime player.gd produces (0.8 m under
-# 1.8x gravity is 0.602 s), so the landing pose arrives on the frame the feet do. Retiming
-# one without the other lands the knight in a mid-air pose or holds the squash in the air.
-#
-# There is no crouch anticipation, on purpose: the impulse is applied on the frame Space
-# goes down, so a wind-up would show the knight sinking while he is already rising. Frame 0
-# is the tail of a push-off instead - the ankles and knees still extending - and the 0.06 s
-# crossfade in from idle/run covers it.
-JUMP = [
-    (0, {                                       # push-off: still folded, already extending
-        "Hips":          [("loc", (0.0, 0.0, -0.065))],
-        "Spine":         [("X", -7)],
-        "Chest":         [("X", -4)],
-        "LeftUpperLeg":  [("X", 12)],
-        "LeftLowerLeg":  [("X", -32)],
-        "LeftFoot":      [("X", 20)],
-        "RightUpperLeg": [("X", 12)],
-        "RightLowerLeg": [("X", -32)],
-        "RightFoot":     [("X", 20)],
-        "LeftUpperArm":  [("X", -24)],          # free arm back, about to throw upward
-        "LeftLowerArm":  [("X", -10)],
-        "RightUpperArm": [("X", -10)],
-    }),
-    (3, {                                       # extension: legs straight, toes pointed
-        "Hips":          [("loc", (0.0, 0.0, 0.02))],
-        "Spine":         [("X", 4)],
-        "Chest":         [("X", 3)],
-        "Neck":          [("X", -3)],
-        "LeftUpperLeg":  [("X", -10)],
-        "LeftLowerLeg":  [("X", -4)],
-        "LeftFoot":      [("X", -28)],
-        "RightUpperLeg": [("X", -10)],
-        "RightLowerLeg": [("X", -4)],
-        "RightFoot":     [("X", -28)],
-        "LeftUpperArm":  [("Y", 20), ("X", 34)],   # thrown up and forward
-        "LeftLowerArm":  [("X", 10)],
-        "RightUpperArm": [("Y", -14), ("X", 12)],  # the sword arm lifts, but only a little
-    }),
-    (9, {                                       # apex: knees up, scissored so it is not a squat
-        "Spine":         [("X", -6)],
-        "Chest":         [("X", -4)],
-        "Neck":          [("X", 4)],
-        "LeftUpperLeg":  [("X", 46)],
-        "LeftLowerLeg":  [("X", -84)],
-        "LeftFoot":      [("X", -12)],
-        "RightUpperLeg": [("X", 30)],
-        "RightLowerLeg": [("X", -98)],
-        "RightFoot":     [("X", -6)],
-        "LeftUpperArm":  [("Y", 12), ("X", 14)],
-        "LeftLowerArm":  [("X", 25)],
-        "RightUpperArm": [("Y", -8)],
-        "RightLowerArm": [("X", 6)],
-    }),
-    (13, {                                      # descent: still folded, starting to unfold
-        "Hips":          [("loc", (0.0, 0.0, 0.01))],
-        "Spine":         [("X", -3)],
-        "LeftUpperLeg":  [("X", 28)],
-        "LeftLowerLeg":  [("X", -52)],
-        "RightUpperLeg": [("X", 18)],
-        "RightLowerLeg": [("X", -60)],
-        "RightFoot":     [("X", 4)],
-        "LeftUpperArm":  [("Y", 6), ("X", -12)],
-        "RightUpperArm": [("Y", -4)],
-    }),
-    (16, {                                      # reach: nearly straight, one frame off contact
-        "LeftUpperLeg":  [("X", 6)],
-        "LeftLowerLeg":  [("X", -12)],
-        "LeftFoot":      [("X", 12)],
-        "RightUpperLeg": [("X", 4)],
-        "RightLowerLeg": [("X", -14)],
-        "RightFoot":     [("X", 12)],
-        "LeftUpperArm":  [("X", -20)],
-        "RightUpperArm": [("X", -6)],
-    }),
-    (18, {                                      # absorb: knees take the landing, hips drop
-        "Hips":          [("loc", (0.0, 0.0, -0.075))],
-        "Spine":         [("X", -10)],
-        "Chest":         [("X", -5)],
-        "LeftUpperLeg":  [("X", 14)],
-        "LeftLowerLeg":  [("X", -36)],
-        "LeftFoot":      [("X", 22)],
-        "RightUpperLeg": [("X", 14)],
-        "RightLowerLeg": [("X", -36)],
-        "RightFoot":     [("X", 22)],
-        "LeftUpperArm":  [("Y", -6), ("X", -14)],
-        "LeftLowerArm":  [("X", 14)],
-        "RightUpperArm": [("X", -4)],
-    }),
-]
-
-CLIPS = [
-    ("idle", IDLE),
-    ("run", RUN),
-    ("attack", ATTACK),
-    ("roll", ROLL),
-    ("jump", JUMP),
-]
 
 
 # -------------------------------------------------------------------------------- authoring
@@ -620,10 +248,60 @@ def new_action(name):
     action = bpy.data.actions.new(name)
     action.use_fake_user = True
     arm.animation_data.action = action
+    slot = None
     slots = getattr(action, "slots", None)
     if slots is not None:
-        arm.animation_data.action_slot = slots.new(id_type="OBJECT", name=arm.name)
-    return action
+        slot = slots.new(id_type="OBJECT", name=arm.name)
+        arm.animation_data.action_slot = slot
+    return action, slot
+
+
+def fcurves_of(action, slot):
+    """The Action's f-curves, whichever layout this Blender uses.
+
+    4.4 moved them out of `action.fcurves` and into a channel bag under the action's slot,
+    which is why this is not a one-liner. Nothing else in this script needs to reach them -
+    `keyframe_insert` creates them - but easing is a property *of the curve*, not of the pose.
+    """
+    layers = getattr(action, "layers", None)
+    if layers and slot is not None:
+        for layer in layers:
+            for strip in layer.strips:
+                getter = getattr(strip, "channelbag", None)
+                if getter is None:
+                    continue
+                try:
+                    bag = getter(slot)
+                except TypeError:
+                    bag = getter(slot, ensure=False)
+                if bag is not None and len(bag.fcurves):
+                    return bag.fcurves
+    return getattr(action, "fcurves", [])
+
+
+def apply_easing(action, slot, easing_by_frame):
+    """Set interpolation and easing on every curve's keys, by frame.
+
+    Done in one pass at the end rather than after each `keyframe_insert`, because a pose
+    writes 147 curves and the frame is the only thing that identifies a key across them.
+
+    Returns the number of keyframe points touched, and the caller treats zero as fatal. A
+    silent no-op here is the worst outcome available: the clip exports looking authored, the
+    default auto-Bezier easing is still baked into every sampled frame, and the swing
+    decelerates into its own impact exactly as it did before anyone tried to fix it.
+    """
+    if not easing_by_frame:
+        return 0
+    touched = 0
+    for fcurve in fcurves_of(action, slot):
+        for point in fcurve.keyframe_points:
+            ease = easing_by_frame.get(round(point.co[0]))
+            if ease is None:
+                continue
+            point.interpolation, point.easing = ease
+            touched += 1
+        fcurve.update()
+    return touched
 
 
 def report(label, pose):
@@ -645,11 +323,12 @@ arm.animation_data_create()
 for pose_bone in arm.pose.bones:
     pose_bone.rotation_mode = "QUATERNION"
 
-for clip_name, keys in CLIPS:
-    action = new_action(clip_name)
+for clip_name, clip_keys in CLIPS:
+    action, slot = new_action(clip_name)
+    keys = [unpack_key(key) for key in clip_keys]
     print(f"[anim] {clip_name}: {len(keys)} keyframes, "
           f"{keys[-1][0]} frames ({keys[-1][0] / FPS:.2f}s)")
-    for frame, delta in keys:
+    for frame, delta, _ease in keys:
         pose = build(layered(STANCE, delta))
         for name in BONES:
             pose_bone = arm.pose.bones[name]
@@ -662,6 +341,18 @@ for clip_name, keys in CLIPS:
         hips.keyframe_insert("location", frame=frame)
         report(f"f{frame}", pose)
 
+    # Keys with no `ease` keep Blender's default auto-clamped Bezier, which is what every
+    # clip but `attack` wants: none of them has one frame that has to be the fastest.
+    easing = {frame: ease for frame, _delta, ease in keys if ease is not None}
+    if easing:
+        touched = apply_easing(action, slot, easing)
+        if touched == 0:
+            raise SystemExit(f"[anim] {clip_name}: asked for easing on {sorted(easing)} and "
+                             "set none - fcurves_of() found no curves, so the clip would "
+                             "have exported with its default easing silently intact")
+        print(f"[anim] {clip_name}: easing on frames {sorted(easing)}, "
+              f"{touched} keyframe points set")
+
     track = arm.animation_data.nla_tracks.new()
     track.name = clip_name
     track.strips.new(clip_name, 0, action)
@@ -671,7 +362,7 @@ for track in arm.animation_data.nla_tracks:
     track.mute = True
 
 # Godot names the imported MeshInstance3D after the Blender object, so without this the
-# node inside knight_rigged.glb is called `knight_normalized` after the previous stage.
+# node inside the shipped GLB would be called `knight_normalized` after the previous stage.
 name = bpy.path.display_name_from_filepath(dst)
 mesh_obj.name = name
 mesh_obj.data.name = name + "Mesh"

@@ -17,9 +17,14 @@ extends "res://tools/import/vertex_color_material.gd"
 ## again after any clone-and-import. Setting loop_mode here costs a dictionary and keeps the
 ## whole clip contract in one readable place.
 ##
-## Wire it up in assets/models/knight_rigged.glb.import, replacing the plain vertex-colour
+## Wire it up in assets/models/knight_rigged_v2.glb.import, replacing the plain vertex-colour
 ## script (this one calls it):
 ##     import_script/path="res://tools/import/knight_rigged_import.gd"
+##
+## Editing *this* file does not trigger a reimport - Godot keys those off the source asset, so
+## the constant below changes and nothing happens until the cached
+## .godot/imported/knight_rigged_v2.glb-*.scn is deleted and --headless --import re-run. Never
+## delete the .glb.import instead; that mints a new UID and orphans every ext_resource.
 
 ## Looping locomotion, one-shot actions. Asserted by tools/rigging/verify_rigged_import.gd.
 const LOOP_MODES := {
@@ -30,9 +35,20 @@ const LOOP_MODES := {
 	&"jump": Animation.LOOP_NONE,
 }
 
-## Frame 8 of 15 at 30 fps, straight out of bl_author_anims.py's ATTACK block: the pose where
-## the blade is out in front and its tip sits inside the player's Hitbox sphere. Syncing to
-## the art beats the timer this replaces, which guessed 0.12s and landed the hit early.
+## Frame 8 of 18 at 30 fps, where clips_knight.py's ATTACK block poses contact - and, for the
+## first time, also where the blade is actually fastest. Measured with
+## tools/rigging/blade_speed.py: the tip peaks at 29.9 m/s entering frame 8, which is 100% of
+## the clip's peak, and sits 0.70 m from the Hitbox sphere's centre (radius 1.1).
+##
+## That agreement is authored, not lucky. The previous 15-frame clip peaked at 37.2 m/s two
+## frames *before* its contact pose and had decayed to 15.5 m/s by the time it got there,
+## because the exporter force-samples at 30 fps and bakes Blender's default auto-Bezier
+## ease-in into every key; this constant had to be pulled back to 7/30 to compensate. The
+## rewrite eases into contact on purpose (SINE/EASE_IN out of the held coil), so the peak and
+## the pose are the same frame and no compensation is needed.
+##
+## Do not move this by eye. Re-measure first - the peak frame is a property of the easing, not
+## of the poses, and nothing about the clip's shape advertises where it is.
 const ATTACK_IMPACT_TIME := 8.0 / 30.0
 
 ## Method-track paths resolve against the AnimationMixer's `root_node`, and the mixer here is

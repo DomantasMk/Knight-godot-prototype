@@ -73,7 +73,7 @@ tool rather than offsetting the node — a transform here fights the scatter cod
 
 ## Rigged assets
 
-Worked example: `entities/player/` against `assets/models/knight_rigged.glb`.
+Worked example: `entities/player/` against `assets/models/knight_rigged_v2.glb`.
 
 **If you are producing the rig and clips too, not just importing them, use the
 `rigged-character-pipeline` skill instead** — it covers all five stages and this is its last

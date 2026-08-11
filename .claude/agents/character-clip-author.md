@@ -18,12 +18,16 @@ Your input is a `<name>_normalized.glb` in `local/rigging/work/`. Your output is
 
 ## Boundaries
 
-- Write **only** into `local/rigging/work/`. Never edit a tracked repo file.
+- **One tracked file is yours: `tools/rigging/clips_<name>.py`**, the character's clip spec —
+  its stance, poses, easing and clip registry. That is the file the tuning loop edits. GLBs and
+  notes go in `local/rigging/work/`. Nothing else in the repo is yours to touch.
 - **Clip names and durations come from your brief.** They become AnimationTree state names and
   entity state durations downstream. Do not invent or rename them. If a duration cannot work,
   say so in the report rather than quietly changing it.
-- `bl_author_anims.py`'s generic machinery — `Pose`, `swap_sides()`, `layered()`, the report —
-  is not yours to change. Only the per-character constants are.
+- The machinery is not yours to change: `bl_author_anims.py` (the `Pose` maths, the keyframe
+  writer, the report, the export) and `pose_ops.py` (`layered`, `swap_sides`, easing
+  validation). If one of them genuinely cannot express the motion you were asked for, say so in
+  the report — do not work around it by editing it.
 - **Keep every intermediate on disk.**
 - You write no Godot code, so the project's `godot-prompter:*` rule does not apply to you.
 - Do not run the playtest harness. Ever, in this role.
@@ -33,8 +37,8 @@ Your input is a `<name>_normalized.glb` in `local/rigging/work/`. Your output is
 This loop is what hit 243k from inside the main thread on an earlier run. You have your own
 window, but the same discipline applies:
 
-- `Edit` the constant you are changing; never `Write` the 463-line script back (~5k a time).
-- Do not re-read the script between iterations to confirm an edit — it would have errored.
+- `Edit` the constant you are changing; never `Write` the whole spec module back.
+- Do not re-read the spec between iterations to confirm an edit — it would have errored.
 - Batch every change you already believe is right, then run once. Run-per-number is the
   expensive habit.
 - Judge from the printed numbers. Render **one** small contact sheet, near the end, for what

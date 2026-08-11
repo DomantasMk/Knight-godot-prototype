@@ -5,7 +5,7 @@ a **Hurtbox** receives it, a **Health** node stores it. An entity gets combat by
 nodes it needs — nothing subclasses anything.
 
 **Flow** — `attack` → cooldown check → Attack state → the `attack` clip's Call Method track
-reaches frame 8 of 15 → `player.deal_attack_damage()` → `Hitbox.strike()` → each overlapping
+reaches frame 8 of 18 → `player.deal_attack_damage()` → `Hitbox.strike()` → each overlapping
 Hurtbox → `Health.take_damage()` → `health_changed` / `died` → the owning entity reacts and
 rebroadcasts on `EventBus`.
 

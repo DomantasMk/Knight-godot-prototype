@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://ckvx21cmop2sw"
-path="res://.godot/imported/knight_rigged.glb-c436f82cdd134d87dc7850cf901bca99.scn"
+uid="uid://copd0xs1jkiap"
+path="res://.godot/imported/knight_rigged_v2.glb-db2e3632af012b53045cd1489176c51a.scn"
 
 [deps]
 
-source_file="res://assets/models/knight_rigged.glb"
-dest_files=["res://.godot/imported/knight_rigged.glb-c436f82cdd134d87dc7850cf901bca99.scn"]
+source_file="res://assets/models/knight_rigged_v2.glb"
+dest_files=["res://.godot/imported/knight_rigged_v2.glb-db2e3632af012b53045cd1489176c51a.scn"]
 
 [params]
 

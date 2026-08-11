@@ -25,8 +25,16 @@ const ANIM_NAMES := {
 @export var friction: float = 50.0
 @export var turn_speed: float = 12.0
 @export var attack_cooldown: float = 0.45
-## How long the Attack state holds input. Match this to the attack clip's length.
-@export var attack_duration: float = 0.5
+## How long the Attack state holds input, in seconds. Deliberately **shorter than the attack
+## clip**, and that is the whole point of the constant: the clip's last frames are a recovery
+## into an open guard, and the state machine already crossfades them out under whatever comes
+## next. Holding input for the full clip animates that recovery twice and spends a fifth of a
+## second of responsiveness on nothing.
+##
+## Set to the overshoot frame - f11 of 18 - which is where the swing reads as finished. The
+## impact lands well before it, so cutting here never costs a hit. attack_cooldown still gates
+## re-swinging; this only governs when moving, rolling and jumping come back.
+@export var attack_lock: float = 11.0 / 30.0
 ## Movement speed multiplier while a swing is playing.
 @export var attack_move_penalty: float = 0.35
 @export var roll_speed: float = 11.0
@@ -68,7 +76,7 @@ func _ready() -> void:
 	var tree: AnimationTree = %AnimationTree
 	_playback = tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
 	_playback.travel(ANIM_NAMES[_state])
-	_check_jump_clip(tree)
+	_check_clips(tree)
 	EventBus.player_spawned.emit(self)
 
 
@@ -97,13 +105,14 @@ func _physics_process(delta: float) -> void:
 
 
 ## Every transition lives here; each state decides only what may follow it.
-## Attack, Roll and Jump are locked - they ignore input until they are done.
+## Attack, Roll and Jump are locked - they ignore input until they release. Roll and Jump
+## release when they are done; Attack releases at attack_lock, part-way through its clip.
 func _advance_state(direction: Vector3) -> void:
 	var next := _state
 
 	match _state:
 		State.ATTACK:
-			if _state_time >= attack_duration:
+			if _state_time >= attack_lock:
 				next = _ground_state(direction)
 		State.ROLL:
 			if _state_time >= roll_duration:
@@ -193,7 +202,9 @@ func _drive_roll() -> void:
 
 
 ## Lands the swing. Called by the Call Method track on the attack clip, at frame 8
-## of 15 - the frame where the blade is out front and its tip is inside the Hitbox.
+## of 18 - the contact pose, which the clip's easing also makes the blade's fastest
+## frame, with the tip 0.70 m inside the Hitbox. See tools/import/knight_rigged_import.gd
+## for why those being the same frame is authored rather than lucky.
 ## The track is attached at import time by tools/import/knight_rigged_import.gd, and
 ## resolves this node by path, so the name has to stay public and stay put.
 ## Guarded because a blend that re-enters the clip would otherwise strike twice.
@@ -210,20 +221,33 @@ func _jump_airtime() -> float:
 	return 2.0 * sqrt(2.0 * jump_height / _gravity)
 
 
-## Nothing connects the clip's length to the arc's, so retuning jump_height or
-## gravity_scale would quietly leave the knight touching down in a mid-air pose, or
-## holding the landing squash in the air. Cheap to say out loud, easy to miss by eye.
-func _check_jump_clip(tree: AnimationTree) -> void:
+## Two places where a clip's length and a gameplay number have to agree and nothing in the
+## engine makes them. Both are cheap to say out loud and easy to miss by eye, so they are
+## warnings at startup rather than comments nobody reads.
+func _check_clips(tree: AnimationTree) -> void:
 	if not OS.is_debug_build():
 		return
 	var player := tree.get_node_or_null(tree.anim_player) as AnimationPlayer
-	if player == null or not player.has_animation(ANIM_NAMES[State.JUMP]):
+	if player == null:
 		return
-	var clip: float = player.get_animation(ANIM_NAMES[State.JUMP]).length
-	if absf(clip - _jump_airtime()) > 0.08:
-		push_warning(("jump clip is %.2fs but the hop lasts %.2fs - retime one to the " +
-				"other in tools/rigging/bl_author_anims.py (JUMP) or in the inspector")
-				% [clip, _jump_airtime()])
+
+	# Retuning jump_height or gravity_scale would quietly leave the knight touching down in a
+	# mid-air pose, or holding the landing squash in the air.
+	if player.has_animation(ANIM_NAMES[State.JUMP]):
+		var jump_clip: float = player.get_animation(ANIM_NAMES[State.JUMP]).length
+		if absf(jump_clip - _jump_airtime()) > 0.08:
+			push_warning(("jump clip is %.2fs but the hop lasts %.2fs - retime one to the " +
+					"other in tools/rigging/clips_knight.py (JUMP) or in the inspector")
+					% [jump_clip, _jump_airtime()])
+
+	# attack_lock ending *before* the clip is the entire point of it. Equal or longer and the
+	# recovery is animated twice, which is the bug the constant was introduced to remove.
+	if player.has_animation(ANIM_NAMES[State.ATTACK]):
+		var attack_clip: float = player.get_animation(ANIM_NAMES[State.ATTACK]).length
+		if attack_lock >= attack_clip:
+			push_warning(("attack_lock is %.2fs against a %.2fs attack clip - input is held " +
+					"for the whole swing, so the clip's recovery tail plays instead of " +
+					"crossfading out under the next action") % [attack_lock, attack_clip])
 
 
 ## WASD mapped into the camera's frame, flattened onto the ground plane.

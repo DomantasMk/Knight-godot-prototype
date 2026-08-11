@@ -29,7 +29,7 @@ extends SceneTree
 ## The other half of the gate - that the track's path still resolves to the player and that
 ## the hit actually lands - is `verify_player_scene.gd`, because it is a scene fact.
 
-const MODEL := "res://assets/models/knight_rigged.glb"
+const MODEL := "res://assets/models/knight_rigged_v2.glb"
 const EXPECTED_CLIPS := {
 	"idle": Animation.LOOP_LINEAR,
 	"run": Animation.LOOP_LINEAR,
@@ -38,6 +38,10 @@ const EXPECTED_CLIPS := {
 	"jump": Animation.LOOP_NONE,
 }
 const IMPACT_METHOD := &"deal_attack_damage"
+## Must track ATTACK_IMPACT_TIME in tools/import/knight_rigged_import.gd - the two are
+## restated rather than shared because this script runs against the imported asset, not the
+## import script. Frame 8 of 18, which the rewritten clip makes both the contact pose and the
+## blade's speed peak; tools/rigging/blade_speed.py is what proves the second half.
 const IMPACT_TIME := 8.0 / 30.0
 const SOCKET := &"WeaponSocket"
 const SOCKET_TOLERANCE := 0.001

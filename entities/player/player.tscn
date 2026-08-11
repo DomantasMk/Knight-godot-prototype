@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://entities/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://systems/components/hitbox_component.gd" id="2_hitbox"]
-[ext_resource type="PackedScene" uid="uid://ckvx21cmop2sw" path="res://assets/models/knight_rigged.glb" id="3_knight"]
+[ext_resource type="PackedScene" uid="uid://copd0xs1jkiap" path="res://assets/models/knight_rigged_v2.glb" id="3_knight"]
 [ext_resource type="PackedScene" uid="uid://cvy2ln14nbsuc" path="res://assets/models/sword_lowpoly.glb" id="4_sword"]
 
 [sub_resource type="CapsuleShape3D" id="Shape_body"]

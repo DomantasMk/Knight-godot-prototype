@@ -74,7 +74,7 @@ their own install tree.
 | 1 | image → T-pose mesh | Hunyuan3D-2 | `character-mesh-rig` | look at the preview render |
 | 2 | mesh → rig | SkinTokens | `character-mesh-rig` | `glb_inspect.py --tree`, judge the skeleton |
 | 3 | normalize the rig | `bl_normalize_rig.py` | `character-mesh-rig` | assertions inside the script |
-| 4 | author clips | `bl_author_anims.py` | `character-clip-author` | printed numbers, then **one** contact sheet |
+| 4 | author clips | `bl_author_anims.py` | `character-clip-author` | printed numbers, `blade_speed.py --gates` for anything with a moment of contact, then **one** contact sheet |
 | 5 | into the game | Godot import + scene | **you** | two `verify_*.gd` scripts, both asserted |
 
 Stages 1–2 are gated: each proves the next is worth attempting. Stage 4 is the long pole —
@@ -138,7 +138,7 @@ i.e. a different mesh, a different rig, a different knight. Keeping them is free
 directory is gitignored.
 
 **The knight is not stuck, though**, and no character with a shipped GLB is. `assets/models/
-knight_rigged.glb` *is* a normalized rig — Stage 3's output plus clips — so
+knight_rigged_v2.glb` *is* a normalized rig — Stage 3's output plus clips — so
 `bl_author_anims.py` takes it as its own input and `strip_animation()` drops the previous
 run's Actions on load. Re-authoring from it reproduced all four original clips with identical
 report numbers and a glTF diff of exactly one added animation, which is what makes it safe to
@@ -182,16 +182,27 @@ before. The short version of what must not be got wrong:
 | Install layouts, version pins, VRAM | user-level `hunyuan3d` + `skintokens` skills | machine-local, absolute paths |
 | Why the project is shaped this way | `context/animation.md` | project memory, loaded on demand |
 
-## Known cheap win, not yet taken
+## Stage 4 is three files now
 
-`bl_author_anims.py` mixes generic machinery (`Pose`, `swap_sides()`, `layered()`, the report)
-with per-character constants (`STANCE`, the clip poses, `CLIPS`, `SWORD_LENGTH`). The Stage 4
-loop therefore edits a 463-line file to change a number, and each edit rides in the agent's
-context. Splitting the constants into a small per-character spec module the script imports
-would shrink that loop several-fold, as would having the script assert its gate ranges and
-exit non-zero rather than printing numbers for a human to judge.
+The split this section used to call for has been taken:
 
-Was blocked on having no known-good output to verify a refactor against. It no longer is:
-re-running the script on `assets/models/knight_rigged.glb` reproduces the shipped clips
-exactly, so the split can be proved to change nothing without a fresh `_normalized.glb`.
-**Do it before the next multi-clip pass**, whichever character that is for.
+| File | Owner | What it holds |
+|---|---|---|
+| `tools/rigging/bl_author_anims.py` | machinery | `Pose`, the keyframe writer, the report, the export |
+| `tools/rigging/clips_<name>.py` | **the Stage 4 agent** | one character's stance, poses, easing, `CLIPS` |
+| `tools/rigging/pose_ops.py` | machinery | `layered`, `swap_sides`, easing validation |
+
+The driver takes the spec name as its third argument (`-- <src> <dst> knight`), so a new
+character copies an existing spec rather than editing the driver. Proved a no-op when it
+landed: re-running over `assets/models/knight_rigged_v2.glb` before and after produced an
+identical BIN chunk and identical JSON.
+
+Two things came with it. **Per-key easing** — a clip key may carry a third element, and it
+governs the interval *leaving* that key, matching Blender's own semantics. And
+**`tools/rigging/blade_speed.py`**, which runs FK on the weapon socket over the exported GLB
+and asserts a swing's shape, because the pose report can only see positions and the knight's
+first swing failed on *spacing*: it landed its hit at 42 % of peak blade speed and nothing in
+the pipeline could catch it.
+
+Still not taken, and still cheap: having `bl_author_anims.py` itself assert the head/toe/blade
+ranges rather than printing them for a human to judge. `blade_speed.py` is the pattern to copy.
