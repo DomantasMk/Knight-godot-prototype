@@ -3,9 +3,9 @@ extends SceneTree
 
 ## Assert that an imported rigged model survived Godot's import step intact.
 ##
-##     & $godot --path . --headless --script res://tools/rigging/verify_rigged_import.gd
+##     & $godot --path . --headless --script res://tools/verify/verify_rigged_import.gd
 ##
-## The Stage 5 gate is "the knight imports coloured, not white", and a headless run that
+## The gate is "the knight imports coloured, not white", and a headless run that
 ## exits 0 proves nothing about that - a white, unskinned, unanimated model loads perfectly
 ## well. Rendering a frame and looking at it costs ~250 tokens that then ride along for the
 ## whole session (see the screenshot rule in CLAUDE.md), so the cheap checks are asserted
@@ -15,9 +15,9 @@ extends SceneTree
 ##
 ## - `vertex_color_use_as_albedo` on every surface. Godot's glTF importer reads COLOR_0 but
 ##   never sets this flag, so without `tools/import/vertex_color_material.gd` the knight
-##   imports pure white. This is the actual Stage 5 gate.
+##   imports pure white. This is the gate that actually matters.
 ## - A Skeleton3D with the humanoid bone names, so the AnimationTree's tracks resolve.
-## - The four clips, their durations, and their loop modes. Both the loop modes and the
+## - The five clips, their durations, and their loop modes. Both the loop modes and the
 ##   attack clip's Call Method track are applied by `tools/import/knight_rigged_import.gd`,
 ##   which the `.import` file has to point at - an unwired import script fails silently.
 ## - The impact track itself. glTF cannot carry an event track, so if this one goes missing
@@ -41,7 +41,7 @@ const IMPACT_METHOD := &"deal_attack_damage"
 ## Must track ATTACK_IMPACT_TIME in tools/import/knight_rigged_import.gd - the two are
 ## restated rather than shared because this script runs against the imported asset, not the
 ## import script. Frame 8 of 18, which the rewritten clip makes both the contact pose and the
-## blade's speed peak; tools/rigging/blade_speed.py is what proves the second half.
+## blade's speed peak; the asset pipeline's blade_speed.py is what proves the second half.
 const IMPACT_TIME := 8.0 / 30.0
 const SOCKET := &"WeaponSocket"
 const SOCKET_TOLERANCE := 0.001
@@ -158,7 +158,7 @@ func _check_impact_track(attack: Animation) -> void:
 ##
 ## Godot reads a GLB literally, and Blender's exporter writes a bone-parented node's rotation
 ## in its own Z-up frame while converting everything around it to Y-up. The socket therefore
-## arrives 90 degrees about X out of true unless tools/rigging/glb_fix_socket.py has been run
+## arrives 90 degrees about X out of true unless the asset pipeline's glb_fix_socket.py ran
 ## over the file: the blade points out of the knight's back and the 0.18 m grip inset drops
 ## the sword below the hand instead of into it. Nothing errors and every clip still plays.
 ##
@@ -186,8 +186,8 @@ func _check_socket(root: Node) -> void:
 		var drift := maxf((basis.x - Vector3.RIGHT).length(),
 				maxf((basis.y - Vector3.UP).length(), (basis.z - Vector3.BACK).length()))
 		if drift > SOCKET_TOLERANCE:
-			_fail(("%s is rotated %.3f off the rest pose (blade %v, wanted +Y) - run " +
-					"tools/rigging/glb_fix_socket.py over the GLB") % [SOCKET, drift, basis.y])
+			_fail(("%s is rotated %.3f off the rest pose (blade %v, wanted +Y) - re-export " +
+					"it: glb_fix_socket.py did not run") % [SOCKET, drift, basis.y])
 		print("[verify] %s at rest: origin %v, blade %v" % [SOCKET, rest.origin, basis.y])
 		return
 	_fail("no BoneAttachment3D - the WeaponSocket empty did not survive import")

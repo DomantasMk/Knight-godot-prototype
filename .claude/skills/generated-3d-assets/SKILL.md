@@ -5,12 +5,13 @@ description: Use when bringing a generated or externally authored 3D model into 
 
 # Generated 3D assets in KnightPrototype
 
-Getting a generated mesh (Hunyuan3D or similar image-to-3D tooling) into this project.
+Getting a generated or externally authored mesh into this project.
 
-**Scope: the Godot side only.** Generating the mesh and decimating it to a GLB is a
-separate, machine-local concern — see the user-level `hunyuan3d` skill for the pipeline,
-version pins, and the colour-space and UV-floor traps. This skill starts from a finished
-GLB.
+**Scope: the Godot side only.** Producing the GLB — generating the mesh, decimating it,
+rigging it, authoring its clips — happens in
+[3d-asset-preparation-ai-pipeline](https://github.com/DomantasMk/3d-asset-preparation-ai-pipeline),
+a separate repo cloned alongside this one. This skill starts from a finished GLB and the
+handoff that came with it.
 
 Per `CLAUDE.md`, also invoke `godot-prompter:assets-pipeline` before import work.
 Tool paths (the Godot binary in particular) are in `CLAUDE.md` under Commands.
@@ -75,15 +76,19 @@ tool rather than offsetting the node — a transform here fights the scatter cod
 
 Worked example: `entities/player/` against `assets/models/knight_rigged_v2.glb`.
 
-**If you are producing the rig and clips too, not just importing them, use the
-`rigged-character-pipeline` skill instead** — it covers all five stages and this is its last
-one. Everything below is the Godot side alone. Read `context/animation.md` first; per
-`CLAUDE.md`, also invoke `godot-prompter:animation-system` before touching an `AnimationTree`.
+**If the rig or the clips themselves need changing, that is a session in the pipeline repo**,
+not an edit here. What comes back from it is the handoff this section consumes: the GLB, the
+clip names and their **lengths in seconds as exported**, which clips loop, and where the
+attack's impact falls in seconds. Everything below is the Godot side alone. Read
+`context/animation.md` first; per `CLAUDE.md`, also invoke `godot-prompter:animation-system`
+before touching an `AnimationTree`.
 
 **A model exported the ordinary way from Blender arrives facing backwards.** Blender
-characters face -Y, the glTF exporter writes that as +Z, and a `Node3D`'s forward is -Z. Fix
-it in the rig (`bl_normalize_rig.py` bakes the 180° into the mesh *and* the rest bones), never
-with a correction transform on `Visuals` or `Model` — a later asset fix then cancels against it.
+characters face -Y, the glTF exporter writes that as +Z, and a `Node3D`'s forward is -Z. The
+pipeline's rig normalizer already bakes that 180° into the mesh *and* the rest bones, so never
+add a correction transform on `Visuals` or `Model` — the two cancel and the character
+moonwalks. If an asset really does face the wrong way, it is a re-export over there, not a
+transform here.
 
 **Sockets are free if you bone-parent an empty in Blender.** Godot's glTF importer converts
 it into a `BoneAttachment3D`, so nothing has to be wired in `_ready()`. The generated node is
@@ -122,6 +127,24 @@ That path encodes the scene's shape; assert it rather than trusting it.
 Leave `animation/remove_immutable_tracks=false` when clips key every bone. A bone holding a
 constant *non-rest* value for a whole clip looks immutable, and dropping its track snaps that
 bone back to rest for the entire clip.
+
+### Landing a new or re-authored character GLB
+
+The pipeline always hands over a **new file**, and it lands under a **new filename** in
+`assets/models/` — a fresh `.import` and UID is the point. Delete the superseded asset in the
+same pass as the `ext_resource` swap: earlier leaves a broken reference, later leaves dead
+weight. Never delete a `.glb.import` to force a reimport.
+
+**Adding one clip to a character that already shipped touches four places here, and missing
+any one fails silently:**
+
+1. the new state in the `AnimationTree`, plus its transitions
+2. the clip in `LOOP_MODES` in that asset's import script
+3. the name in `verify_rigged_import.gd`'s `EXPECTED_CLIPS`
+4. the name in `verify_player_scene.gd`'s transition list
+
+Editing an import script does **not** trigger a reimport — Godot keys those off the source
+file. Delete the cached `.godot/imported/<asset>.glb-*.scn` and re-import instead.
 
 ## Materials: the part that breaks silently
 
@@ -205,8 +228,8 @@ for the whole session, so the checks a number can answer are scripted instead. T
 knight has two gates, both exiting non-zero on failure — copy the shape for a new asset:
 
 ```powershell
-& $godot --path . --headless --script res://tools/rigging/verify_rigged_import.gd   # the asset
-& $godot --path . --headless --script res://tools/rigging/verify_player_scene.gd    # the seam
+& $godot --path . --headless --script res://tools/verify/verify_rigged_import.gd   # the asset
+& $godot --path . --headless --script res://tools/verify/verify_player_scene.gd    # the seam
 ```
 
 The first checks per-surface vertex-colour albedo, bone names, clip durations and loop modes,
@@ -214,6 +237,10 @@ and the impact track. The second instantiates the entity, walks it into the tree
 `AnimationTree` by hand through the attack clip and checks the strike actually fires — the
 kind of failure that plays perfectly and deals zero damage. Keep the picture for the questions
 a number cannot answer.
+
+Both are **written for the knight** — `MODEL`, `EXPECTED_CLIPS`, `SCENE`, `SOCKET_PATH` and
+the transition list are constants at the top. Copy and re-point them for a new character
+rather than loosening them; the value is entirely in their being specific.
 
 ## Choosing flat vs textured in this project
 

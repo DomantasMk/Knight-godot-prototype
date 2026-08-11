@@ -236,8 +236,8 @@ func _check_clips(tree: AnimationTree) -> void:
 	if player.has_animation(ANIM_NAMES[State.JUMP]):
 		var jump_clip: float = player.get_animation(ANIM_NAMES[State.JUMP]).length
 		if absf(jump_clip - _jump_airtime()) > 0.08:
-			push_warning(("jump clip is %.2fs but the hop lasts %.2fs - retime one to the " +
-					"other in tools/rigging/clips_knight.py (JUMP) or in the inspector")
+			push_warning(("jump clip is %.2fs but the hop lasts %.2fs - retime the hop in the " +
+					"inspector, or the clip in the asset pipeline repo (clips_knight.py, JUMP)")
 					% [jump_clip, _jump_airtime()])
 
 	# attack_lock ending *before* the clip is the entire point of it. Equal or longer and the

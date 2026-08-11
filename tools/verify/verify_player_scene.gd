@@ -3,10 +3,10 @@ extends SceneTree
 
 ## Assert that the player scene is wired to the rigged knight and that the swing lands.
 ##
-##     & $godot --path . --headless --script res://tools/rigging/verify_player_scene.gd
+##     & $godot --path . --headless --script res://tools/verify/verify_player_scene.gd
 ##
 ## verify_rigged_import.gd covers the asset. This covers the seam between the asset and the
-## game, which is where Stage 6/7 can fail quietly:
+## game, which is where the wiring can fail quietly:
 ##
 ## - The sword hangs off the generated BoneAttachment3D, not off a pivot bolted to the body.
 ## - The AnimationTree is `active`, points at the model's AnimationPlayer, and resolves its

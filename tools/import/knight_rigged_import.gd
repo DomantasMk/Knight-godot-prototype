@@ -9,7 +9,8 @@ extends "res://tools/import/vertex_color_material.gd"
 ## Blender - it has to be re-attached on the Godot side. Doing it here, at import time, keeps
 ## the clip reproducible and headless. The alternative is turning on "Save to File" for the
 ## `attack` clip and hand-editing the generated `.res`, which has to be redone by hand every
-## time the animation is re-authored in `tools/rigging/bl_author_anims.py`.
+## time the animation is re-authored - and re-authoring happens in a different repo entirely
+## (see CLAUDE.md), so it must not depend on anything remembered here.
 ##
 ## Loop modes belong in the `.import` file's `_subresources` block by rights, and were there
 ## first. The problem is that one entry there makes Godot write out slice_1..slice_100 of
@@ -26,7 +27,8 @@ extends "res://tools/import/vertex_color_material.gd"
 ## .godot/imported/knight_rigged_v2.glb-*.scn is deleted and --headless --import re-run. Never
 ## delete the .glb.import instead; that mints a new UID and orphans every ext_resource.
 
-## Looping locomotion, one-shot actions. Asserted by tools/rigging/verify_rigged_import.gd.
+## Looping locomotion, one-shot actions. glTF carries no loop mode, so this table restates what
+## the pipeline handed over. Asserted by tools/verify/verify_rigged_import.gd.
 const LOOP_MODES := {
 	&"idle": Animation.LOOP_LINEAR,
 	&"run": Animation.LOOP_LINEAR,
@@ -35,9 +37,9 @@ const LOOP_MODES := {
 	&"jump": Animation.LOOP_NONE,
 }
 
-## Frame 8 of 18 at 30 fps, where clips_knight.py's ATTACK block poses contact - and, for the
-## first time, also where the blade is actually fastest. Measured with
-## tools/rigging/blade_speed.py: the tip peaks at 29.9 m/s entering frame 8, which is 100% of
+## Frame 8 of 18 at 30 fps, where the ATTACK clip poses contact - and, for the first time, also
+## where the blade is actually fastest. Measured with the asset pipeline's
+## blade_speed.py: the tip peaks at 29.9 m/s entering frame 8, which is 100% of
 ## the clip's peak, and sits 0.70 m from the Hitbox sphere's centre (radius 1.1).
 ##
 ## That agreement is authored, not lucky. The previous 15-frame clip peaked at 37.2 m/s two
@@ -54,7 +56,7 @@ const ATTACK_IMPACT_TIME := 8.0 / 30.0
 ## Method-track paths resolve against the AnimationMixer's `root_node`, and the mixer here is
 ## the player's AnimationTree, whose `root_node` points at this instanced model. Two levels up
 ## from the model is the Player: Model -> Visuals -> Player. Coupled to the shape of
-## entities/player/player.tscn on purpose; tools/rigging/verify_player_scene.gd asserts it
+## entities/player/player.tscn on purpose; tools/verify/verify_player_scene.gd asserts it
 ## still resolves, and fails the build if either side moves.
 const PLAYER_PATH := NodePath("../..")
 

@@ -35,9 +35,9 @@ each one was paid for by a bug.
   (`Skeleton3D/RightHand/WeaponSocket`).
 - Blender exports that empty's **rotation** in its own Z-up frame while converting everything
   around it, so it reaches Godot 90° out — sword through the knight's back, hanging below the
-  hand. Its importer repeats the mistake in reverse, so Blender itself never shows it.
-  `bl_author_anims.py` repairs the file as its last act (`tools/rigging/glb_fix_socket.py`);
-  never any earlier, or the next Blender step mis-reads the corrected file.
+  hand. Its importer repeats the mistake in reverse, so Blender itself never shows it. The
+  asset pipeline repairs the GLB on the way out and `verify_rigged_import.gd` asserts the
+  result at rest; never compensate for it in a scene.
 - Anything glTF cannot carry — loop modes, event tracks — goes in the asset's **import
   script**, never in the `.import` file's `_subresources`: one animation entry there makes
   Godot rewrite `slice_1..slice_100` of defaults per clip on every reimport, 279 KB of churn

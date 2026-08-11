@@ -20,7 +20,7 @@ each file is the footnote you open only when working in that area.
 | [level-01](context/level-01.md) | The main scene is a **demo harness**, not a designed level: 40×40 floor, road, player at `(0,0.1,8)`, 26 trees scattered at runtime from a fixed seed. Replace freely. |
 | [combat](context/combat.md) | Damage = Hitbox (deals, on `strike()` only) → Hurtbox (receives) → Health (stores), composed per entity. Includes the 3D physics layer table. |
 | [camera-and-movement](context/camera-and-movement.md) | Fixed 56° follow camera, no player control; WASD is camera-relative, so the two are one system. Camera must be a **sibling** of the player. |
-| [animation](context/animation.md) | Rigged knight, 5 in-place clips authored on the rig (no retarget). `AnimationTree` `root_node` must point at the **model**; loop modes, the impact track and the sword socket's rotation are all repaired after export. |
+| [animation](context/animation.md) | Rigged knight, 5 in-place clips — **authored in a separate repo**, wired up here. `AnimationTree` `root_node` must point at the **model**; loop modes and the impact track are re-applied at import. |
 | [conventions](context/conventions.md) | Recurring rules: hand-written `.tscn` `@export` caveat, Jolt uniform-scale rule, `1-exp(-k·dt)` smoothing, tween kill-before-restart, material duplication. |
 
 **Read** a note before changing that area — the gotchas are there because each one cost a bug.
@@ -67,9 +67,13 @@ levels/{level_01,main_menu}/                        one folder per level
 systems/                                            cross-cutting logic with no scene of its own
 systems/components/                                 reusable nodes an entity composes in
 resources/                                          .tres data: stats, items, themes
-tools/                                              dev-only harnesses, not shipped
+tools/{import,verify,playtest}/                     dev-only harnesses, not shipped
 ui/                                                 HUD, menus
 ```
+
+`tools/import/` holds per-asset import scripts, `tools/verify/` the headless gates that assert
+an imported asset and its scene are wired right, `tools/playtest/` the on-request harness. **No
+asset-authoring code lives here** — see "Character art" below.
 
 Empty directories hold a `.gitkeep`; delete it once real files land. If this layout is outgrown (multiple people working art vs. code), the migration target is the split `assets/ scenes/ scripts/` layout — but don't do it preemptively.
 
@@ -100,19 +104,16 @@ These settings are already chosen and shape how new code should be written:
 
 ## Commands
 
-None of this project's external tools are on `PATH`, and their paths are machine-specific, so
-they live in `.claude/settings.local.json` (gitignored) rather than in this file — that keeps
-the repo machine-agnostic. Claude Code exports them into every session it spawns; set them
-yourself for a shell you opened by hand.
+Godot is this project's only external tool, it is not on `PATH`, and its path is
+machine-specific — so it lives in `.claude/settings.local.json` (gitignored) rather than in
+this file, which keeps the repo machine-agnostic. Claude Code exports it into every session it
+spawns; set it yourself for a shell you opened by hand.
 
 | Variable | Tool |
 |---|---|
 | `GODOT_BIN` / `GODOT_BIN_CONSOLE` | Godot; use the **console** build when you need stdout |
-| `BLENDER_BIN` | headless Blender, for `tools/rigging/bl_*.py` |
-| `HUNYUAN3D_DIR` / `HUNYUAN3D_PY` | image→mesh generation (user-level `hunyuan3d` skill) |
-| `SKINTOKENS_DIR` / `SKINTOKENS_PY` | mesh→rig auto-rigging (user-level `skintokens` skill) |
 
-**Never move one of these into `.claude/settings.json`** — that file is checked in and shared.
+**Never move it into `.claude/settings.json`** — that file is checked in and shared.
 
 ```powershell
 $godot = $env:GODOT_BIN                            # e.g. ...\Godot_v4.7.1-stable_win64.exe
@@ -123,19 +124,20 @@ $godot = $env:GODOT_BIN                            # e.g. ...\Godot_v4.7.1-stabl
 & $godot --path . --headless --quit-after 60       # smoke-test: run 60 frames, print errors
 ```
 
-### Character art, rigging, and animation
+### Character art, rigging, and animation — a different repo
 
-Bringing any new character from a mesh to an animated entity — or adding clips to an existing
-one — goes through the **`rigged-character-pipeline`** skill, which carries the five stages,
-what to change per character, and the trap list. Importing a finished GLB (rigged or not) is
-the **`generated-3d-assets`** skill. Invoke them rather than reconstructing the commands;
-several steps in both fail silently.
+**This repo holds finished models and clips, never the machinery that produced them.** Mesh
+generation, auto-rigging, rig normalization and clip authoring live in
+[3d-asset-preparation-ai-pipeline](https://github.com/DomantasMk/3d-asset-preparation-ai-pipeline)
+(cloned alongside this one at `../3d-asset-preparation-ai-pipeline`), together with its Blender
+scripts, its skill and its two subagents. Blender, Hunyuan3D and SkinTokens are that repo's
+dependencies, which is why none of their paths are in `.claude/settings.local.json` here.
 
-That pipeline **runs its first four stages in subagents** — `character-mesh-rig` and
-`character-clip-author`, defined in `.claude/agents/`. This is not a style preference: a full
-run is ~170 requests and three of the first five attempts hit 225–246k against a 200k limit.
-The generation and tuning loops belong in their own windows; the main thread orchestrates and
-does Stage 5. The skill carries the briefs and the budget rule.
+So a change to how the knight *moves* is a session in the other repo, and what comes back is a
+GLB plus a handoff: the clip names and their lengths in seconds, which clips loop, and where
+the attack's impact falls. **Wiring that GLB into the game is this repo's half**, and it goes
+through the **`generated-3d-assets`** skill — import, scene, `AnimationTree`, import script,
+gates. Invoke it rather than reconstructing the steps; several of them fail silently.
 
 ### Playtesting the running game — on request only
 
